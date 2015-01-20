@@ -23,7 +23,7 @@ public class LongMap extends PrimitiveMap
 {						
 	public LongMap(String mapName)
 	{
-		super(mapName, 2, DB.SIMPLEINDEX, DB.Persisted());
+	  super(mapName, 2, DB.SIMPLEINDEX, DB.Persisted());
 	}
 	
 	/*public LongMap(String mapName, int arraySize)
