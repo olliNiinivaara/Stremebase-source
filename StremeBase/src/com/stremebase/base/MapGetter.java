@@ -22,14 +22,14 @@ import com.stremebase.file.FileManager.ValueSlot;
 
 public class MapGetter
 {
-	protected final PrimitiveMap map;
+	protected final FixedMap map;
 	
-	MapGetter(PrimitiveMap map)
+	MapGetter(FixedMap map)
 	{
 	  this.map = map;	
 	}
 	
-	public PrimitiveMap map()
+	public FixedMap map()
 	{
 		return map;
 	}

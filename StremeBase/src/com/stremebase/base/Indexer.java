@@ -19,14 +19,14 @@ import java.util.stream.LongStream;
 
 public class Indexer
 {
-	private final PrimitiveMap map;
+	private final FixedMap map;
 	@SuppressWarnings("unused")
 	private final int intitialSize;
 	//private final LongSetMap posIndex;
 	private boolean neg = false;
 	//private LongSetMap negIndex;
 	
-	public Indexer(PrimitiveMap map, int intitialSize, boolean multiset, boolean indexed)
+	public Indexer(FixedMap map, int intitialSize, boolean multiset, boolean indexed)
 	{
 		this.map = map;
 		this.intitialSize = intitialSize;

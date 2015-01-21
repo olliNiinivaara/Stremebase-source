@@ -27,7 +27,11 @@ import com.stremebase.file.ValueFile;
 import com.stremebase.file.FileManager.ValueSlot;
 
 
-public abstract class PrimitiveMap
+/**
+ * FixedMap map is the abstract base class for all maps having fixed size arrays as values. 
+ *
+ */
+public abstract class FixedMap
 {
 	protected final String mapName;
 	protected final int nodeSize;
@@ -47,7 +51,7 @@ public abstract class PrimitiveMap
 	/**
 	 * Used only internally.
 	 */
-	public PrimitiveMap(String mapName, int nodeSize, int indexType, boolean persist)
+	public FixedMap(String mapName, int nodeSize, int indexType, boolean persist)
 	{						
 		this.mapName = mapName+nodeSize;
 		this.nodeSize = nodeSize;
@@ -330,7 +334,7 @@ public abstract class PrimitiveMap
 			{				
 				if (key == toKey || remaining == 0)
 				{
-					KeyFile file = DB.fileManager.getNextKeyFile(PrimitiveMap.this.mapGetter, fileId);
+					KeyFile file = DB.fileManager.getNextKeyFile(FixedMap.this.mapGetter, fileId);
 					if (file == null) return false;
 					fileId = file.id;		
 					if (file.fromKey+DB.db.KEYSTOAKEYFILE<key) continue;		
@@ -345,7 +349,7 @@ public abstract class PrimitiveMap
 				}
 				key++;
 				if (key>highestKey) return false;	
-				KeyFile buf = PrimitiveMap.this.getData(key, false);			
+				KeyFile buf = FixedMap.this.getData(key, false);			
 				
 				if (buf.read(buf.base(key))==1)
 				{

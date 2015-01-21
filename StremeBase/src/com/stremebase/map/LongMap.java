@@ -15,11 +15,11 @@ import java.util.stream.LongStream;
 import java.util.stream.LongStream.Builder;
 
 import com.stremebase.base.DB;
-import com.stremebase.base.PrimitiveMap;
+import com.stremebase.base.FixedMap;
 import com.stremebase.file.KeyFile;
 
 
-public class LongMap extends PrimitiveMap
+public class LongMap extends FixedMap
 {						
   /**
    * Creates a new LongMap that acts a simple key-value store where one long value can be associated with a given key.
@@ -65,7 +65,7 @@ public class LongMap extends PrimitiveMap
    * @param key the key
    * @param array the array to put the values into.
    * If there's no value, throws IndexOutOfBoundsException
-   * @see com.stremebase.base.PrimitiveMap#containsKey(long key)
+   * @see com.stremebase.base.FixedMap#containsKey(long key)
    */
   public void get(long key, long[] array)
 	{
