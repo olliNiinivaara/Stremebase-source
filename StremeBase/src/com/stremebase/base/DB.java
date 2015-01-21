@@ -121,19 +121,19 @@ public class DB
   
   /**
    * This map constructor parameter tells that the map is not to be indexed.
-   * @see com.stremebase.containers.LongMap#LongMap
+   * @see com.stremebase.map.LongMap#LongMap
    */
   public static final int NOINDEX = 0;
   
   /**
    * This map constructor parameter tells that the map will be indexed and multiple values per key are not allowed.
-   * @see com.stremebase.containers.LongMap#LongMap
+   * @see com.stremebase.map.LongMap#LongMap
    */
   public static final int SIMPLEINDEX = 1;
   
   /**
    * This map constructor parameter tells that the map will be indexed and multiple values per key are counted.
-   * @see com.stremebase.containers.LongMap#LongMap
+   * @see com.stremebase.map.LongMap#LongMap
    */
   public static final int MULTIINDEX = 2;
 	  	  
