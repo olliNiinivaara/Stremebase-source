@@ -138,7 +138,7 @@ public class DB
   public static final int MULTIINDEX = 2;
 	  	  
 	/**
-   * A constant that indicates that integer value is missing.
+   * A constant indicating that the value is missing.
    */
 	public static final long NULL = Long.MIN_VALUE;
 	
