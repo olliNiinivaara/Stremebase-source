@@ -20,85 +20,104 @@ import com.stremebase.file.KeyFile;
 
 
 public class OneMap extends FixedMap
-{						
+{
   /**
-   * Creates a new LongMap that acts a simple key-value store where one long value can be associated with a given key.
-   * No need to use methods that operate with value indices or arrays.
-   * The returned LongMap is not indexed.
-   * The returned LongMap is persistent iff the database is.
-   * @param mapName name for the map. Must be a database-wide unique value.
+   * Creates a new OneMap for associating one value with one key.
+   * The returned map is not indexed.
+   * The returned map is persistent iff the database is.
+   * 
+   * @param mapName
+   *          name for the map. Must be a database-wide unique value.
    */
   public OneMap(String mapName)
-	{
-	  super(mapName, 2, DB.NOINDEX, DB.Persisted());
-	}
-				
+  {
+    super(mapName, 2, DB.NOINDEX, DB.Persisted());
+  }
+
   /**
    * Removes the given key from the map
-   * @param key the key to be removed
+   * 
+   * @param key
+   *          the key to be removed
    */
   public void remove(long key)
-	{
-		KeyFile buf = getData(key, false);
-		if (buf==null) return;
-		int base = buf.base(key);
-	  if (!buf.setActive(base, false)) return;
+  {
+    KeyFile buf = getData(key, false);
+    if (buf == null)
+      return;
+    int base = buf.base(key);
+    if (!buf.setActive(base, false))
+      return;
 
-	  if (isIndexed()) indexer.index(key, buf.read(base+1), DB.NULL); 
-	}
-	
-  	
+    if (isIndexed())
+      indexer.index(key, buf.read(base + 1), DB.NULL);
+  }
+
   /**
-   * Returns value
-   * @param key the key
-   * @return the value, or {@link com.stremebase.base.DB#NULL} if key was nonexistent
+   * Returns the value associated with the key
+   * 
+   * @param key
+   *          the key
+   * @return the value, or {@link com.stremebase.base.DB#NULL} if key was
+   *         nonexistent
    */
-	public long get(long key)
-	{
-		KeyFile buf = getData(key, false);
-		if (buf==null) return DB.NULL;
-		int base = buf.base(key);
-		if (buf.read(base)==0) return DB.NULL;
-		return buf.read(base+1);
-	}
-	
-	/**
-   * Puts a value
-   * @param key the key
-   * @param value the value
+  public long get(long key)
+  {
+    KeyFile buf = getData(key, false);
+    if (buf == null)
+      return DB.NULL;
+    int base = buf.base(key);
+    if (buf.read(base) == 0)
+      return DB.NULL;
+    return buf.read(base + 1);
+  }
+
+  /**
+   * Associates a value with a key
+   * 
+   * @param key
+   *          the key
+   * @param value
+   *          the value
    */
-	public void put(long key, long value)
-	{				
-		if (key<0) throw new IllegalArgumentException("Negative keys are not supported ("+key+")");
-		KeyFile buf = getData(key, true);
-		int base = buf.base(key);
-		boolean olds = !buf.setActive(base, true);
-		if (isIndexed())
-		{
-		  long oldValue = DB.NULL;
-		  if (olds)	oldValue = buf.read(base+1);
-		  indexer.index(key, oldValue, value);
-		}
-		buf.write(base+1, value);
-	}
-	
-	/**
-   * Returns the array associated with a key as a {@link LongStream}
-   * @param key the key
-   * @return the values or an empty stream if there's no value
+  public void put(long key, long value)
+  {
+    if (key < 0)
+      throw new IllegalArgumentException("Negative keys are not supported ("
+          + key + ")");
+    KeyFile buf = getData(key, true);
+    int base = buf.base(key);
+    boolean olds = !buf.setActive(base, true);
+    if (isIndexed())
+    {
+      long oldValue = DB.NULL;
+      if (olds)
+        oldValue = buf.read(base + 1);
+      indexer.index(key, oldValue, value);
+    }
+    buf.write(base + 1, value);
+  }
+
+  /**
+   * Returns the value associated with a key as a {@link LongStream}
+   * 
+   * @param key
+   *          the key
+   * @return the value or an empty stream if there's no value
    */
-	@Override
-	public LongStream values(long key)
-	{
-		KeyFile buf = getData(key, false);
-		if (buf==null) return LongStream.empty();
-		int base = buf.base(key);
-		Builder b = LongStream.builder();	
-		b.add(buf.read(base+1));
-		return b.build();
-	}
-	
-	@Override
+  @Override
+  public LongStream values(long key)
+  {
+    KeyFile buf = getData(key, false);
+    if (buf == null)
+      return LongStream.empty();
+    int base = buf.base(key);
+    Builder b = LongStream.builder();
+    b.add(buf.read(base + 1));
+    return b.build();
+  }
+
+  @Override
   protected Object getObject(long key)
   {
     return get(key);
@@ -108,10 +127,10 @@ public class OneMap extends FixedMap
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
     Builder b = LongStream.builder();
-    keys().filter(key ->
-    {
+    keys().filter(key -> {
       long value = get(key);
-      if (value<lowestValue || value>highestValue) return false;
+      if (value < lowestValue || value > highestValue)
+        return false;
       return true;
     }).forEach(key -> b.add(key));
     return b.build();
@@ -120,7 +139,7 @@ public class OneMap extends FixedMap
   @Override
   protected void put(long key, int index, long value)
   {
-    throw new UnsupportedOperationException("OneMap index?");  
+    throw new UnsupportedOperationException("OneMap index?");
   }
 
   @Override
