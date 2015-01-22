@@ -17,7 +17,7 @@ public class Chapter_1_Introduction
 {
   private static final Scanner in = new Scanner(System.in);
   
-  private static boolean persisted = false; 
+  private static boolean persisted = false;  //try true also! run many times! 
   public static OneMap entity_primarykey;
   
   
@@ -99,45 +99,45 @@ public class Chapter_1_Introduction
     p("Let's start by checking, if entity_primarykey contains an entry for value %d: ", value);
     p("if (entity_primarykey.containsValue(%d))...;", value);
     
-    if (entity_primarykey.containsValue(value))
-    {
-      p("An entry already exists, we shall not create a duplicate (end of lesson).");
-      in.nextLine();
-      return;
-    }
-    
-    p("No entry yet.");
-    p("");
-    p("To generate a new key, we first get the largest key in the map:");
-    p("long key = entity_primarykey.getLargestKey();");
-
     long key = entity_primarykey.getLargestKey();
-
-    p("");
-    p("Then we add 1 to it:");
-    p("key++;");
-
-    key++;
-
-    p("");
-    p("And now we can associate our new key %d with the new value %d:", key, value);
-    p("entity_primarykey.put(key, value)");
-
-    entity_primarykey.put(key, value);
-
-    p("");
-    p("Internally Stremebase may cache data and use other tricks to speed up writing.");
-    p("To flush the caches and restore consistency, you must call commit() between writes and reads.");
-    p("You can commit individual maps like this: map.commit();");
-    p("Or commit all maps in one shot by calling: DB.db.commit();");
     
-    DB.db.commit();
-    
-    p(""); 
-    p("If Stremebase is in persistent mode, commit() also guarantees that changes are flushed to disk.");
-    
-    p("");
-    
+    if (entity_primarykey.containsValue(value)) p("An entry already exists, we shall not create a duplicate.%n");
+    else
+    {
+
+      p("No entry yet.");
+      p("");
+      p("To generate a new key, we first get the largest key in the map:");
+      p("long key = entity_primarykey.getLargestKey();");
+
+
+
+      p("");
+      p("Then we add 1 to it:");
+      p("key++;");
+
+      key++;
+
+      p("");
+      p("And now we can associate our new key %d with the new value %d:", key, value);
+      p("entity_primarykey.put(key, value)");
+
+      entity_primarykey.put(key, value);
+
+      p("");
+      p("Internally Stremebase may cache data and use other tricks to speed up writing.");
+      p("To flush the caches and restore consistency, you must call commit() between writes and reads.");
+      p("You can commit individual maps like this: map.commit();");
+      p("Or commit all maps in one shot by calling: DB.db.commit();");
+
+      DB.db.commit();
+
+      p(""); 
+      p("If Stremebase is in persistent mode, commit() also guarantees that changes are flushed to disk.");
+
+      p("");
+    }
+
     p("To make the next lesson more interesting, let's ensure that there are some more entries: ");
     p("for (long l = 0; l<100; l++) entity_primarykey.put(++key, l %% 20);");
     for (long l = 0; l<100; l++) entity_primarykey.put(++key, l % 20);
