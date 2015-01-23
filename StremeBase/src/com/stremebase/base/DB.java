@@ -114,7 +114,7 @@ public class DB
    * The wildcard character that represents zero or more arbitrary characters at the end of word. (% in SQL).
    * <p>
    * Default: * (asterisk)
-   * @see stremebase.property.api.Text#getKeysContainingWords(CharSequence... words)
+   * see stremebase.property.api.Text#getKeysContainingWords(CharSequence... words)
    */
   //public final char WILDENDING;
   
