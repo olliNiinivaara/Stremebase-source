@@ -32,7 +32,7 @@ public class LongMap extends FixedMap
   //* Same as calling <code>LongMap(mapName, 1, DB.NOINDEX, DB.Persisted());</code>
   public LongMap(String mapName)
 	{
-	  super(mapName, 2, DB.NOINDEX, DB.Persisted());
+	  super(mapName, 2, DB.NOINDEX, DB.isPersisted());
 	}
 	
 	/*public LongMap(String mapName, int arraySize)

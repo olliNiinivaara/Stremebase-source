@@ -76,7 +76,7 @@ public class FileManager
 	public String getDirectory(MapGetter pd, char type)
 	{
 		String dir = DB.db.DIRECTORY+pd.map().getMapName()+File.separatorChar+type+File.separatorChar;
-		if (DB.Persisted())
+		if (DB.isPersisted())
 		{
 		  File f = new File(dir);
 		  if (!f.exists()) f.mkdirs();

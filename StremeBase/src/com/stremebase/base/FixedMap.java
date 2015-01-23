@@ -55,7 +55,7 @@ public abstract class FixedMap
 	{						
 		this.mapName = mapName+nodeSize;
 		this.nodeSize = nodeSize;
-		this.persisted = DB.Persisted() && persist;
+		this.persisted = DB.isPersisted() && persist;
 		this.mapGetter = new MapGetter(this);
 		
 		largestValueFileId = DB.fileManager.loadProperty(mapGetter);

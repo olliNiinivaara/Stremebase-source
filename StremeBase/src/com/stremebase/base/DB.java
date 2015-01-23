@@ -13,6 +13,7 @@ package com.stremebase.base;
 
 
 import java.io.File;
+import java.time.ZoneId;
 
 import com.stremebase.file.FileManager;
 
@@ -116,6 +117,8 @@ public class DB
    * @see stremebase.property.api.Text#getKeysContainingWords(CharSequence... words)
    */
   //public final char WILDENDING;
+  
+  public final ZoneId ZONE;
 	
 //----------------------------------------------------------------
   
@@ -146,14 +149,14 @@ public class DB
   * DB.NULL value as String.
   *
 	public static final String NULLLONG = Long.toString(NULL);*/
-		
+			
 	private static boolean persisted = true;
 		
 	/**
 	 * Check whether database was started in persisted or in in-memory mode. 
 	 * @return true, if data is persisted to disk.
 	 */
-	public static boolean Persisted() {return persisted;}
+	public static boolean isPersisted() {return persisted;}
 	
 	/**
 	 * The singleton FileManager instance.
@@ -187,6 +190,8 @@ public class DB
 	  //DEFAULTTEXTSPLITTER = " ";
 	  //TEXTBINDER = ' ';
 	  //WILDENDING = '*';
+	  
+	  ZONE = ZoneId.systemDefault();
 	}
 	
 	/**

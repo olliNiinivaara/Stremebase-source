@@ -31,7 +31,7 @@ public class OneMap extends FixedMap
    */
   public OneMap(String mapName)
   {
-    super(mapName, 2, DB.NOINDEX, DB.Persisted());
+    super(mapName, 2, DB.NOINDEX, DB.isPersisted());
   }
 
   /**
