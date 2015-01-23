@@ -41,7 +41,7 @@ public class Chapter_1_Introduction
   public static void welcome()
   {
     l();
-    p("Stremebase v.0.1 Tutorial - Chapter 1 - introduction - welcome");
+    p("Stremebase v.0.1 Tutorial - Chapter 1: Introduction");
     p("");
     p("Stremebase is pronounced as Streambase. The name reflects it's stream-oriented design and it's xstreme simplicity.");
     p("");
@@ -160,7 +160,7 @@ public class Chapter_1_Introduction
     entity_attribute.commit();
     p("Committed!");
     
-    if (DB.Persisted())
+    if (DB.isPersisted())
     {
       p("");
       p("Since you are running the tutorial in persistent mode, it is important to know how");
@@ -286,7 +286,7 @@ public class Chapter_1_Introduction
     p("Finished!");
     p("Get time for a OneMap: %d milliseconds", end-start);    
     p("");
-    if (DB.Persisted())
+    if (DB.isPersisted())
     {
       p("Last but not least, let's remove the test data from your hard disk: map.clear();");
       map.clear();
