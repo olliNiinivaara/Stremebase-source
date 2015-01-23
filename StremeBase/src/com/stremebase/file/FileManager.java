@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import com.stremebase.base.DB;
+import com.stremebase.base.FixedMap;
 import com.stremebase.base.MapGetter;
 
 
@@ -62,7 +63,15 @@ public class FileManager
 			this.slotPosition = o.readLong();	
 			this.slotSize = o.readLong();
 		}
-	}	
+	}
+	
+	public static void deleteDir(File dir)
+  {
+    if (dir==null || !dir.exists()) return;
+    File[] files = dir.listFiles();
+    for(File f: files) if(f.isDirectory()) deleteDir(f); else f.delete();
+    dir.delete();
+  }	
 	
 	public String getDirectory(MapGetter pd, char type)
 	{
@@ -79,9 +88,12 @@ public class FileManager
 	{
 		if (loadedMaps.containsKey(pd.map().getMapName())) throw new IllegalArgumentException("Map "+pd.map().getMapName()+" is already loaded"); 
 		loadedMaps.put(pd.map().getMapName(), pd);	
-		if (!pd.map().isPersisted()) return DB.NULL;
-		loadKeyFiles(pd);
-		return loadValueFiles(pd);
+		if (pd.map().isPersisted())
+		{
+		  loadKeyFiles(pd);
+		  if (!(pd.map() instanceof FixedMap)) return loadValueFiles(pd);
+		}
+    return DB.NULL;
 	}
 	
 	public void commit(MapGetter property)
@@ -98,12 +110,12 @@ public class FileManager
 		TreeMap<Long, KeyFile> kFiles = property.getKeyFiles();
 		for (KeyFile kF: kFiles.values()) kF.delete();
 		kFiles.clear();
-		new File(getDirectory(property, 'K')).delete();
+		//new File(getDirectory(property, 'K')).delete();
 		
 		Map<Long, ValueFile> vFiles = property.getValueFiles();
 		for (ValueFile vF: vFiles.values()) vF.delete();
 		vFiles.clear();
-		new File(getDirectory(property, 'V')).delete();
+		//new File(getDirectory(property, 'V')).delete();
 		
 		TreeMap<Long, List<ValueSlot>> slots = property.getFreeValueSlots();
 		if (slots!=null)
@@ -111,6 +123,8 @@ public class FileManager
 		  for (List<ValueSlot> slotBag: slots.values()) cachedFreeSlots-=slotBag.size();
 		  slots.clear();
 		}
+		
+		if (property.map().isPersisted()) deleteDir(new File(DB.db.DIRECTORY+property.map().getMapName()));
 	}
 	
 	public void close(MapGetter map)

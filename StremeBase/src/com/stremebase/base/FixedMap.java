@@ -146,7 +146,7 @@ public abstract class FixedMap
 	 */
 	public LongStream keys()
 	{
-		return keys(DB.NULL+1, Long.MAX_VALUE);
+		return keys(Long.MIN_VALUE, Long.MAX_VALUE);
 	}
 	
 	/**
@@ -159,6 +159,15 @@ public abstract class FixedMap
 	{
 		return StreamSupport.longStream(spliterator(lowestKey, highestKey, false), false);
 	}
+	
+	/**
+   *  Returns all keys as a parallel {@link LongStream}
+   * @return parallel stream of keys
+   */
+  public LongStream keyset()
+  {
+    return StreamSupport.longStream(spliterator(Long.MIN_VALUE, Long.MAX_VALUE, true), true);
+  }
 			
 	/**
    *  Removes all the keys that appear in the stream

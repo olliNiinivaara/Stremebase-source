@@ -195,6 +195,7 @@ public class DB
 	 */
 	public static void startDB(boolean persist)
 	{
+	  if (db!=null) return;
 	  startDB(new DB(), persist);	
 	}
 	
@@ -244,13 +245,6 @@ public class DB
 	public void clear()
 	{
 		fileManager.clearAll();
-		if (persisted) deleteDir(new File(DIRECTORY));
-	}
-		
-	protected void deleteDir(File dir)
-	{
-		File[] files = dir.listFiles();
-    for(File f: files) if(f.isDirectory()) deleteDir(f); else f.delete();
-    dir.delete();
+		if (persisted) FileManager.deleteDir(new File(DIRECTORY));
 	}
 }
