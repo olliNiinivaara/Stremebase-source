@@ -3,7 +3,9 @@
  * JDK 8 or later: http://www.oracle.com/technetwork/java/javase/downloads/index.html 
  * stremebase.jar: https://github.com/olliNiinivaara/StremeBase/blob/master/stremebase.jar?raw=true
  *
- * Compile: javac -cp stremebase.jar:. Chapter_1_Introduction.java
+ * compile & run: (windows users :->;) 
+ * javac -cp stremebase.jar Stremebase_1_Introduction.java
+ * java -cp stremebase.jar:. Stremebase_1_Introduction
  */
 
 import java.util.HashMap;
@@ -13,7 +15,7 @@ import com.stremebase.map.OneMap;
 import com.stremebase.base.DB;
 
 
-public class Chapter_1_Introduction
+public class Stremebase_1_Introduction
 {
   
   

@@ -5,7 +5,7 @@ import com.stremebase.base.DB;
 import com.stremebase.base.To;
 
 
-public class Chapter_2_DataTypes
+public class Stremebase_2_DataTypes
 {
   public static OneMap map;
   
