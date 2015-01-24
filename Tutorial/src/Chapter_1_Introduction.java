@@ -1,11 +1,10 @@
 /*
  * You need:
  * JDK 8 or later: http://www.oracle.com/technetwork/java/javase/downloads/index.html 
- * stremebase.jar: https://github.com/olliNiinivaara/StremeBase/blob/master/stremebase.jar?raw=true  
+ * stremebase.jar: https://github.com/olliNiinivaara/StremeBase/blob/master/stremebase.jar?raw=true
+ *
+ * Compile: javac -cp stremebase.jar:. Chapter_1_Introduction.java
  */
-
-package com.stremebase.tutorials.basic;
-
 
 import java.util.HashMap;
 import java.util.Scanner;
