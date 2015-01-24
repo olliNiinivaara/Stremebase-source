@@ -71,6 +71,17 @@ public class OneMap extends FixedMap
       return DB.NULL;
     return buf.read(base + 1);
   }
+  
+  /**
+   * Returns the value associated with the key that is currently streamed with keys()
+   * Usage:  map.keys().forEach(key -> (map.value()...
+   * (Definitely not thread safe)
+   * @return the currently iterated value
+   */
+  public long value()
+  {
+    return iteratedValue;
+  }
 
   /**
    * Associates a value with a key
@@ -128,9 +139,10 @@ public class OneMap extends FixedMap
   {
     Builder b = LongStream.builder();
     keys().filter(key -> {
-      long value = get(key);
-      if (value < lowestValue || value > highestValue)
-        return false;
+      //long value = get(key);
+      //final long value = iteratedValue;
+      //if (value < lowestValue || value > highestValue) return false;
+      if (iteratedValue < lowestValue || iteratedValue > highestValue) return false;
       return true;
     }).forEach(key -> b.add(key));
     return b.build();

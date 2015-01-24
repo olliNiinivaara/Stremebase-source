@@ -308,6 +308,8 @@ public abstract class FixedMap
   
 	
 //------------------------------------------------------------------------------
+
+  protected long iteratedValue;
 	
 	private class KeySetIterator implements PrimitiveIterator.OfLong
 	{
@@ -315,6 +317,7 @@ public abstract class FixedMap
 		private long toKey;
 	  private long remaining;
 	  private Long fileId;
+	  private KeyFile file;
 	  private final long lowestKey;
 	  private final long highestKey;
 		
@@ -343,7 +346,7 @@ public abstract class FixedMap
 			{				
 				if (key == toKey || remaining == 0)
 				{
-					KeyFile file = DB.fileManager.getNextKeyFile(FixedMap.this.mapGetter, fileId);
+					file = DB.fileManager.getNextKeyFile(FixedMap.this.mapGetter, fileId);
 					if (file == null) return false;
 					fileId = file.id;		
 					if (file.fromKey+DB.db.KEYSTOAKEYFILE<key) continue;		
@@ -357,15 +360,15 @@ public abstract class FixedMap
 					}
 				}
 				key++;
-				if (key>highestKey) return false;	
-				KeyFile buf = FixedMap.this.getData(key, false);			
+				if (key>highestKey) return false;			
 				
-				if (buf.read(buf.base(key))==1)
+				if (file.read(file.base(key))==1)
 				{
 					remaining--;
 					
 					if (key>=lowestKey)
 					{
+					  iteratedValue = file.read(file.base(key)+1);
 					  return true;
 					}
 				}

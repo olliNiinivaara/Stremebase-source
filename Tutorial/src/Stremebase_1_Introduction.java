@@ -233,29 +233,29 @@ public class Stremebase_1_Introduction
     p("But what the heck, let's compare StremeBase's OneMap to Java Collection Framework's HashMap!");
     p("");
     testHashMap();
-    testOneMap();   
+    testOneMap();
+    in.nextLine();   
   }
   
   protected static void testHashMap()
-  {
-    final long foo = testsize+1;
-    
+  {    
     p("Putting %d entries to a HashMap", testsize);
     HashMap<Long, Long> map = new HashMap<>();
     long key;    
     System.gc();
-    p("Ready...Set...Go!");
+    p("Ready...Set...Go! (wait...)");
     long start = System.currentTimeMillis();
     for (key=0; key<testsize; key++) map.put(key, key);
     long end = System.currentTimeMillis();
     p("Finished!");
     p("Put time for a HashMap: %d milliseconds", end-start);    
+    
     p("");
     p("Getting all %d entries from a HashMap", testsize);
     System.gc();
     p("Ready...Set...Go!");
     start = System.currentTimeMillis();
-    map.keySet().forEach(k-> {if (map.get(k)%foo==foo) p("Never happens");});
+    map.keySet().forEach(k-> {if (map.get(k)==testsize) p("This never happens");});
     end = System.currentTimeMillis();
     p("Finished!");
     p("Get time for a HashMap: %d milliseconds", end-start);    
@@ -263,9 +263,7 @@ public class Stremebase_1_Introduction
   }
   
   protected static void testOneMap()
-  {
-    final long foo = testsize+1;
-    
+  {    
     p("Putting %d entries to a OneMap", testsize);
     OneMap map = new OneMap("oneMap");
     long key;    
@@ -273,25 +271,31 @@ public class Stremebase_1_Introduction
     p("Ready...Set...Go!");
     long start = System.currentTimeMillis();
     for (key=0; key<testsize; key++) map.put(key, key);
+    map.commit();
     long end = System.currentTimeMillis();
     p("Finished!");
     p("Put time for a OneMap: %d milliseconds", end-start);    
+    
     p("");
     p("Getting all %d entries from a OneMap", testsize);
     System.gc();
     p("Ready...Set...Go!");
     start = System.currentTimeMillis();
-    map.keyset().forEach(k-> {if (map.get(k)%foo==foo) p("Never happens");});
-    map.commit();
+    map.keys().forEach(k-> {if (map.value()==testsize) p("Never happens: "+map.value());});
     end = System.currentTimeMillis();
     p("Finished!");
     p("Get time for a OneMap: %d milliseconds", end-start);    
     p("");
+    
     if (DB.isPersisted())
     {
       p("Last but not least, let's remove the test data from your hard disk: map.clear();");
       map.clear();
     }
+    p("");
+    p("Note that while HashMap size is limited by Java heap size, OneMap size is limited by hard disk size.");
+    p("Also note that HashMap access order is random, while OneMap iterates the keys in ascending order");
+    p("You'll see performance benefits of this fact later when we shall calculate intersections of queries...");
   }
   
   public static void recap()
