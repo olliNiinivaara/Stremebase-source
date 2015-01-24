@@ -48,7 +48,7 @@ public abstract class FixedMap
 	protected final MapGetter mapGetter;
 
 		
-	/**
+	/*
 	 * Used only internally.
 	 */
 	public FixedMap(String mapName, int nodeSize, int indexType, boolean persist)

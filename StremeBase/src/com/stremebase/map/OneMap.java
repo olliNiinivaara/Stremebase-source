@@ -74,7 +74,7 @@ public class OneMap extends FixedMap
   
   /**
    * Returns the value associated with the key that is currently streamed with keys()
-   * Usage:  map.keys().forEach(key -> (map.value()...
+   * Usage:  map.keys().forEach(key -&gt; (map.value()...
    * (Definitely not thread safe)
    * @return the currently iterated value
    */
