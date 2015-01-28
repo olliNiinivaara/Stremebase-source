@@ -7,9 +7,9 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 #Version history
 
 v.0.2  --  2015-23-01 
-No more LongMap, but...
-OneMap: A map (key-value store/column) for associating a key with one value  
-To: Convert common data types to longs and back
+No more LongMap, but...:  
+ -OneMap: A map for associating a long with a long  
+ -To: Convert common data types to longs and back
 
 v.0.1  --  2015-01-01 
 LongMap: A map (key-value store/column) for associating a long with a long
