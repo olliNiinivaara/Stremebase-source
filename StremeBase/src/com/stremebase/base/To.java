@@ -16,10 +16,8 @@ public abstract class To
     return l==DB.NULL ? DB.NULL : Double.longBitsToDouble(sortableDoubleBits(l));
   }
   
-  //Converts IEEE 754 representation of a double to sortable order (or back to the original)
-  //Function stolen from org.apache.lucene.util.NumericUtils
-  //Thanks, Apache Software Foundation
-  public static long sortableDoubleBits(long bits)
+  //Function stolen from org.apache.lucene.util.NumericUtils (thanks, Apache Software Foundation)
+  protected static long sortableDoubleBits(long bits)
   {
     return bits ^ (bits >> 63) & 0x7fffffffffffffffL;
   }
