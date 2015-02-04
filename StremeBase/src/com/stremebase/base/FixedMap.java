@@ -258,6 +258,12 @@ public abstract class FixedMap
 		if (!isIndexed()) return scanningQuery(lowestValue, highestValue);
 		return indexer.keysContainingValue(lowestValue, highestValue);
 	}
+	
+	public LongStream unionQuery(long...values)
+  {     
+    /*if (!isIndexed())*/ return scanningUnionQuery(values);
+    //return indexer.keysContainingValue(lowestValue, highestValue);
+  }
 									
 	/**
 	 * @return Iterator over the keys
@@ -304,6 +310,7 @@ public abstract class FixedMap
 	abstract protected void put(long key, int index, long value);
 	abstract protected int indexOf(long key, int fromIndex, long value);
 	abstract protected LongStream scanningQuery(long lowestValue, long highestValue);
+	abstract protected LongStream scanningUnionQuery(long... values);
   abstract protected Object getObject(long key);
   
 	

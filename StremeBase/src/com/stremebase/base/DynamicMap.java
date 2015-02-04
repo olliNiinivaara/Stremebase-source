@@ -125,7 +125,9 @@ public class DynamicMap extends FixedMap
 		int base = header.base(key);
 		if (header.read(base) == 0)
 		{
-			putToNewSlot(key, new long[] {value});
+			long[] newList = new long[index+1];
+			newList[index] = value;
+			putToNewSlot(key, newList);
 			if (isIndexed()) indexer.index(key, DB.NULL, value);
 			header.setActive(base, true);
 			return;
@@ -346,6 +348,12 @@ public class DynamicMap extends FixedMap
 
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
+  {
+    throw new UnsupportedOperationException("Not implemented yet...");
+  }
+  
+  @Override
+  protected LongStream scanningUnionQuery(long... values)
   {
     throw new UnsupportedOperationException("Not implemented yet...");
   }

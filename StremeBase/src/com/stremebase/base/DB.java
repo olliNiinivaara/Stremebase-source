@@ -15,6 +15,7 @@ package com.stremebase.base;
 import java.io.File;
 import java.time.ZoneId;
 
+import com.stremebase.base.util.StrToInt;
 import com.stremebase.file.FileManager;
 
 /**
@@ -108,7 +109,7 @@ public class DB
    * Default: ' ' (space)
    * @see stremebase.property.api.Text#getText(int key)
    */
-  //public final char TEXTBINDER;
+   public final char TEXTBINDER;
   
   /**
    * The wildcard character that represents zero or more arbitrary characters at the end of word. (% in SQL).
@@ -188,7 +189,7 @@ public class DB
 		MAXCACHEDSETSIZE = 20000;
 	 
 	  //DEFAULTTEXTSPLITTER = " ";
-	  //TEXTBINDER = ' ';
+	  TEXTBINDER = ' ';
 	  //WILDENDING = '*';
 	  
 	  ZONE = ZoneId.systemDefault();
@@ -213,7 +214,7 @@ public class DB
 	{
 		db = dataBase;
 		persisted = persist;
-		//StrToInt.initialize(persist);
+		StrToInt.initialize(persist);
 		
 		if (persist) Runtime.getRuntime().addShutdownHook(
 		new Thread()

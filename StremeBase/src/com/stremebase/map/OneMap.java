@@ -11,6 +11,7 @@
 
 package com.stremebase.map;
 
+import java.util.Arrays;
 import java.util.stream.LongStream;
 import java.util.stream.LongStream.Builder;
 
@@ -134,12 +135,22 @@ public class OneMap extends FixedMap
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
     Builder b = LongStream.builder();
-    keys().filter(key -> {
-      //long value = get(key);
-      //final long value = iteratedValue;
-      //if (value < lowestValue || value > highestValue) return false;
+    keys().filter(key ->
+    {
       if (iteratedValue < lowestValue || iteratedValue > highestValue) return false;
       return true;
+    }).forEach(key -> b.add(key));
+    return b.build();
+  }
+  
+  @Override
+  protected LongStream scanningUnionQuery(long... values)
+  {
+    Arrays.sort(values);    
+    Builder b = LongStream.builder();
+    keys().filter(key ->
+    {
+      return Arrays.binarySearch(values, iteratedValue)>=0 ? true : false;
     }).forEach(key -> b.add(key));
     return b.build();
   }

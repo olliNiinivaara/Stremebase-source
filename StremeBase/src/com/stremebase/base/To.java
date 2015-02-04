@@ -3,6 +3,8 @@ package com.stremebase.base;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
+import com.stremebase.base.util.StrToInt;
+
 
 public abstract class To
 {  
@@ -46,7 +48,7 @@ public abstract class To
   {
     return l |= ((b ? 1l : 0l) << i);
   }
-
+  
   public static boolean toBoolean(long l, long i)
   {
     return ((l >> i) & 1l) == 1l ? true : false;
@@ -57,5 +59,27 @@ public abstract class To
     long mask = 0;
     for (long pos: bitPositions) mask = (mask | (1l << pos));
     return mask;
+  }
+  
+  public static long l(CharSequence word)
+  {
+    return StrToInt.useWord(word, true);
+  }
+  
+  public static long l(CharSequence word, boolean addToIndex)
+  {
+    return StrToInt.useWord(word, addToIndex);
+  }
+  
+  public static void toString(long l, StringBuilder string)
+  {
+    StrToInt.getWord(l, string);
+  } 
+  
+  public static String toString(long l)
+  {
+    StringBuilder string = new StringBuilder();
+    StrToInt.getWord(l, string);
+    return string.toString();
   } 
 }
