@@ -93,17 +93,14 @@ public class OneMap extends FixedMap
    */
   public void put(long key, long value)
   {
-    if (key < 0)
-      throw new IllegalArgumentException("Negative keys are not supported ("
-          + key + ")");
+    if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
     KeyFile buf = getData(key, true);
     int base = buf.base(key);
     boolean olds = !buf.setActive(base, true);
     if (isIndexed())
     {
       long oldValue = DB.NULL;
-      if (olds)
-        oldValue = buf.read(base + 1);
+      if (olds) oldValue = buf.read(base + 1);
       indexer.index(key, oldValue, value);
     }
     buf.write(base + 1, value);
@@ -120,8 +117,7 @@ public class OneMap extends FixedMap
   public LongStream values(long key)
   {
     KeyFile buf = getData(key, false);
-    if (buf == null)
-      return LongStream.empty();
+    if (buf == null) return LongStream.empty();
     int base = buf.base(key);
     Builder b = LongStream.builder();
     b.add(buf.read(base + 1));
