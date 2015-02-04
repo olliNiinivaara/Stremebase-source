@@ -6,7 +6,12 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
-v.0.2  --  2015-23-01  
+v.0.3  --  2015-02-04  
+-String handling
+-Object serialization
+-DynamicMap
+
+v.0.2  --  2015-01-23  
 No more LongMap, but...:  
  -OneMap: A map for associating a long with a long  
  -To: Convert common data types to longs and back
