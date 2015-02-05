@@ -1,3 +1,14 @@
+/*
+ * ---------------------------------------------------------
+ * BEER-WARE LICENSED
+ * This file is based on original work by Olli Niinivaara.
+ * As long as you retain this notice you can do whatever
+ * you want with this stuff. If you meet him one day, and
+ * you think this stuff is worth it, you can buy him a
+ * beer in return.
+ * ---------------------------------------------------------
+ */
+ 
 package com.stremebase.base.util;
 
 import java.util.Spliterator;
@@ -44,13 +55,13 @@ class WordSpliterator implements Spliterator.OfLong
       int i = 0;
       while (true)
       {
-        final long existing = StrToInt.strings.get(key, i+2);
+        final long existing = Lexicon.strings.get(key, i+2);
         if (existing==0 || existing == DB.NULL) break;
-        stack.push(StrToInt.strings.get(key, i+3));
+        stack.push(Lexicon.strings.get(key, i+3));
         i+=2;
       }
 
-      if (StrToInt.strings.get(key, 0)>0)
+      if (Lexicon.strings.get(key, 0)>0)
       {
         action.accept(key);
         return true;

@@ -3,7 +3,7 @@ package com.stremebase.base;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
-import com.stremebase.base.util.StrToInt;
+import com.stremebase.base.util.Lexicon;
 
 
 public abstract class To
@@ -63,23 +63,18 @@ public abstract class To
   
   public static long l(CharSequence word)
   {
-    return StrToInt.useWord(word, true);
+    return Lexicon.useWord(word, true);
   }
-  
-  public static long l(CharSequence word, boolean addToIndex)
-  {
-    return StrToInt.useWord(word, addToIndex);
-  }
-  
+    
   public static void toString(long l, StringBuilder string)
   {
-    StrToInt.getWord(l, string);
+    Lexicon.getWord(l, string);
   } 
   
   public static String toString(long l)
   {
     StringBuilder string = new StringBuilder();
-    StrToInt.getWord(l, string);
+    Lexicon.getWord(l, string);
     return string.toString();
   } 
 }

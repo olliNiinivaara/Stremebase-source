@@ -19,16 +19,16 @@ import com.stremebase.base.DB;
 import com.stremebase.map.ListMap;
 
 
-public class StrToInt
+public class Lexicon
 {	
-	protected static final int width = 16*3+2;
+	protected static final int width = 30*2+2;
 		
 	protected static ListMap strings;
 	protected static final StringBuffer bufs = new StringBuffer();
 	
 	public static void initialize(boolean persist)
 	{
-	  if (strings == null) strings = new ListMap("Stremebase_string_index", width, DB.NOINDEX, DB.isPersisted());
+	  if (strings == null) strings = new ListMap("Stremebase_lexicon", width, DB.NOINDEX, DB.isPersisted());
 	}
 	
 	public static long[] useText(String sentence, String splitter, boolean put)
@@ -97,6 +97,14 @@ public class StrToInt
 		return (int)key;
 	}
 	
+	public static long getIfExists(CharSequence word)
+  {
+    long key = useWord(word, false);
+    if (key==DB.NULL) return key;
+    if (strings.get(key, 0)>0) return key;
+    return DB.NULL;
+  }
+	
 	public static void getWord(long key, StringBuilder string)
   {
 	  string.setLength(0);
@@ -134,9 +142,9 @@ public class StrToInt
 		return bufs.substring(0, bufs.length()-1);
   }*/
 	
-	public static LongStream completeWords(CharSequence start)
+	public static LongStream wordsWithPrefix(CharSequence prefix)
 	{
-		long key = useWord(start, false);
+		long key = useWord(prefix, false);
 		if (key==DB.NULL) return LongStream.empty();
 		return StreamSupport.longStream(new WordSpliterator(key), false);
 	}

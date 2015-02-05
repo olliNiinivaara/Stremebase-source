@@ -15,7 +15,7 @@ package com.stremebase.base;
 import java.io.File;
 import java.time.ZoneId;
 
-import com.stremebase.base.util.StrToInt;
+import com.stremebase.base.util.Lexicon;
 import com.stremebase.file.FileManager;
 
 /**
@@ -214,7 +214,7 @@ public class DB
 	{
 		db = dataBase;
 		persisted = persist;
-		StrToInt.initialize(persist);
+		Lexicon.initialize(persist);
 		
 		if (persist) Runtime.getRuntime().addShutdownHook(
 		new Thread()
