@@ -99,7 +99,6 @@ public class DB
    * The default regular expression for splitting texts to individual words.
    * <p>
    * Default: " " (space)
-   * @see stremebase.property.api.Text#setTextSplitter(String regex)
    */
   //public final String DEFAULTTEXTSPLITTER;
   
@@ -107,7 +106,6 @@ public class DB
    * The character to put between words of texts that were split.
    * <p>
    * Default: ' ' (space)
-   * @see stremebase.property.api.Text#getText(int key)
    */
    public final char TEXTBINDER;
   
