@@ -1,14 +1,3 @@
-/*
- * ---------------------------------------------------------
- * BEER-WARE LICENSED
- * This file is based on original work by Olli Niinivaara.
- * As long as you retain this notice you can do whatever
- * you want with this stuff. If you meet him one day, and
- * you think this stuff is worth it, you can buy him a
- * beer in return.
- * ---------------------------------------------------------
- */
-
 package com.stremebase.map;
 
 import java.util.Arrays;
@@ -19,25 +8,25 @@ import com.stremebase.base.DB;
 import com.stremebase.base.FixedMap;
 import com.stremebase.file.KeyFile;
 
-
-public class OneMap extends FixedMap
+public class ArrayMap extends FixedMap
 {
+
   /**
-   * Creates a new OneMap for associating one value with one key.
+   * Creates a new ArrayMap for associating an array of values with one key.
    * The returned map is not indexed.
    * The returned map is persistent iff the database is.
    * 
    * @param mapName
    *          name for the map. Must be a database-wide unique value.
    */
-  public OneMap(String mapName)
+  public ArrayMap(String mapName, int size)
   {
-    super(mapName, 2, DB.NOINDEX, DB.isPersisted());
+    super(mapName, size+1, DB.NOINDEX, DB.isPersisted());
   }
   
-  public OneMap(String mapName, boolean persist)
+  public ArrayMap(String mapName, int size, boolean persist)
   {
-    super(mapName, 2, DB.NOINDEX, persist);
+    super(mapName, size+1, DB.NOINDEX, persist);
   }
 
   /**
@@ -49,76 +38,97 @@ public class OneMap extends FixedMap
   public void remove(long key)
   {
     KeyFile buf = getData(key, false);
-    if (buf == null)
-      return;
+    if (buf == null) return;
     int base = buf.base(key);
-    if (!buf.setActive(base, false))
-      return;
+    if (!buf.setActive(base, false)) return;
 
-    if (isIndexed())
-      indexer.index(key, buf.read(base + 1), DB.NULL);
+    if (isIndexed()) throw new UnsupportedOperationException("indexing TBD");
+      //indexer.index(key, buf.read(base + 1), DB.NULL);
   }
 
   /**
-   * Returns the value associated with the key
+   * Returns the values associated with the key to the given array
    * 
    * @param key
    *          the key
-   * @return the value, or {@link com.stremebase.base.DB#NULL} if key was
-   *         nonexistent
+   *  @param values an array where the values are written in. Must be large enough.     
+   * @return true, if values exist
    */
-  public long get(long key)
+  public boolean get(long key, long[] values)
   {
     KeyFile buf = getData(key, false);
-    if (buf == null)
-      return DB.NULL;
+    if (buf == null) return false;
     int base = buf.base(key);
-    if (buf.read(base) == 0)
-      return DB.NULL;
-    return buf.read(base + 1);
+    if (buf.read(base) == 0) return false;
+    buf.readToArray(base+1, values, nodeSize-1);
+    return true;
   }
   
   /**
+   * Returns the values associated with the key, or null
+   * 
+   * @param key
+   *          the key  
+   * @return values, or null if there are no values
+   */
+  public long[] get(long key)
+  {
+    long[] values = new long[nodeSize-1];
+    if (!get(key, values)) return null;
+    return values;
+  }
+  
+  public long get(long key, int index)
+  {
+    KeyFile buf = getData(key, false);
+    if (buf == null) return DB.NULL;
+    int base = buf.base(key);
+    if (buf.read(base) == 0) return DB.NULL;
+    return buf.read(base+1+index);
+  }
+  
+  /*
    * Returns the value associated with the key that is currently streamed with keys()
    * Usage:  map.keys().forEach(key -&gt; (map.value()...
    * (Definitely not thread safe)
    * @return the currently iterated value
-   */
+   *
   public long value()
   {
     return iteratedValue;
-  }
+  }*/
 
   /**
-   * Associates a value with a key
+   * Associates values with a key
    * 
    * @param key
    *          the key
-   * @param value
-   *          the value
+   * @param values
+   *          the values
    */
-  public void put(long key, long value)
+  public void put(long key, long[] values)
   {
     if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
     KeyFile buf = getData(key, true);
     int base = buf.base(key);
-    boolean olds = !buf.setActive(base, true);
+    buf.setActive(base, true);
+    /*boolean olds = !buf.setActive(base, true);
     if (isIndexed())
     {
       long oldValue = DB.NULL;
       if (olds) oldValue = buf.read(base + 1);
       indexer.index(key, oldValue, value);
-    }
-    buf.write(base + 1, value);
+    }*/
+    buf.write(base+1, values);
   }
 
-  /**
+  /*
    * Returns the value associated with a key as a {@link LongStream}
    * 
    * @param key
    *          the key
    * @return the value or an empty stream if there's no value
-   */
+   *
   @Override
   public LongStream values(long key)
   {
@@ -128,6 +138,12 @@ public class OneMap extends FixedMap
     Builder b = LongStream.builder();
     b.add(buf.read(base + 1));
     return b.build();
+  }*/
+  
+  @Override
+  public LongStream values(long key)
+  {
+    throw new UnsupportedOperationException("TBD");
   }
 
   @Override
@@ -139,36 +155,38 @@ public class OneMap extends FixedMap
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
-    Builder b = LongStream.builder();
+    throw new UnsupportedOperationException("TBD");
+    /*Builder b = LongStream.builder();
     keys().filter(key ->
     {
       if (iteratedValue < lowestValue || iteratedValue > highestValue) return false;
       return true;
     }).forEach(key -> b.add(key));
-    return b.build();
+    return b.build();*/
   }
   
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
-    Arrays.sort(values);    
+    throw new UnsupportedOperationException("TBD");
+    /*Arrays.sort(values);    
     Builder b = LongStream.builder();
     keys().filter(key ->
     {
       return Arrays.binarySearch(values, iteratedValue)>=0 ? true : false;
     }).forEach(key -> b.add(key));
-    return b.build();
+    return b.build();*/
   }
 
   @Override
   protected void put(long key, int index, long value)
   {
-    throw new UnsupportedOperationException("OneMap index?");
+    throw new UnsupportedOperationException("TBD");
   }
 
   @Override
   protected int indexOf(long key, int fromIndex, long value)
   {
-    throw new UnsupportedOperationException("OneMap index?");
+    throw new UnsupportedOperationException("TBD");
   }
 }

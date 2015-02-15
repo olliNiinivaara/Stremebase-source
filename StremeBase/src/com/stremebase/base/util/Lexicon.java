@@ -43,7 +43,7 @@ public class Lexicon
 		return result;
 	}
 		
-	public static long useWord(CharSequence word, boolean put)
+	synchronized public static long useWord(CharSequence word, boolean put)
   {		
 		if (word.length()==0)
 		{
@@ -86,7 +86,7 @@ public class Lexicon
 		
   	return key;
   }
-	
+  	
 	protected static int addChar(int chr, int previouscharKey, boolean completeWord)
 	{
 		long key = strings.getLargestKey()+1;
@@ -108,6 +108,13 @@ public class Lexicon
 	public static void getWord(long key, StringBuilder string)
   {
 	  string.setLength(0);
+	  
+	  if (key<0)
+	  {
+	    string.append("DB.NULL");
+	    return;
+	  }
+	  
     if (key > Character.MAX_VALUE && strings.get(key, 0)<0) return;
     
     while (key > Character.MAX_VALUE)

@@ -94,6 +94,9 @@ public class DB
    * Default: 100000
    */
   public final int MAXCACHEDSETSIZE;
+  
+  
+  public final int MINIMUMRELATIONSHIPSIZE;
  
   /**
    * The default regular expression for splitting texts to individual words.
@@ -182,6 +185,8 @@ public class DB
 		
 		MAXCACHEDFREESLOTS = 100000;		
 		MAXCACHEDSETSIZE = 20000;
+		
+		MINIMUMRELATIONSHIPSIZE = 1000;
 	 
 	  //DEFAULTTEXTSPLITTER = " ";
 	  TEXTBINDER = ' ';

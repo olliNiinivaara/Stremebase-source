@@ -316,7 +316,7 @@ public class DynamicMap extends FixedMap
 		int pos;
 		long current = DB.NULL;
 		
-		protected ListIterator(long key, long length)
+		public ListIterator(long key, long length)
 		{
 			slot = getSlot(key);
 			pos = position;
