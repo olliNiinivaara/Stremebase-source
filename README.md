@@ -6,9 +6,14 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
+v.0.4 -- 2015-03-09  
+-ArrayMap  
+-ListMap  
+-SetMap
+
 v.0.3  --  2015-02-04  
--String handling
--Object serialization
+-String handling  
+-Object serialization  
 -DynamicMap
 
 v.0.2  --  2015-01-23  
