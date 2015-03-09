@@ -8,7 +8,7 @@
  * beer in return.
  * ---------------------------------------------------------
  */
- 
+
 package com.stremebase.base.util;
 
 
@@ -21,102 +21,102 @@ import com.stremebase.map.ListMap;
 
 public class Lexicon
 {	
-	protected static final int width = 30*2+2;
-		
-	protected static ListMap strings;
-	protected static final StringBuffer bufs = new StringBuffer();
-	
-	public static void initialize(boolean persist)
-	{
-	  if (strings == null) strings = new ListMap("Stremebase_lexicon", width, DB.NOINDEX, DB.isPersisted());
-	}
-	
-	public static long[] useText(String sentence, String splitter, boolean put)
-	{
-		return useWords(put, sentence.split(splitter));
-	}
-	
-	public static long[] useWords(boolean put, CharSequence... words)
-	{
-		long[] result = new long[words.length];
-		for (int i=0; i<result.length; i++) result[i] = useWord(words[i], put);
-		return result;
-	}
-		
-	synchronized public static long useWord(CharSequence word, boolean put)
-  {		
-		if (word.length()==0)
-		{
-			if (!put) return DB.NULL;
-			throw new IllegalArgumentException("Puttin' on empty string");
-		}
-		
-		if (word.length()==1) return word.charAt(0);
-			
-		int key = word.charAt(0);
-	
-  	outerloop: for (int c = 1; c<word.length(); c++)
-  	{	
-  		int i = 0;
-  		while (true)
-  		{  			  			  			
-  			long existing = strings.get(key, i+2);
-  			
-  			if (existing==DB.NULL)	
-  			{ 				
-  				if (!put) return DB.NULL;
-  				strings.put(key, i+2, word.charAt(c));
-  				final int nextPosition = addChar(word.charAt(c), key, c==word.length()-1);
-  				strings.put(key, i+3, nextPosition);
-  				key = nextPosition;
-  				continue outerloop;
-  			}
-  			else
-  			{  				
-  				if (existing==word.charAt(c))
-  		  	{
-  			  	key = (int)strings.get(key, i+3);
-  			  	if (put && c==word.length()-1) strings.put(key, 0, (int)existing);
-            continue outerloop;
-  			  }
-  			}
-  			i+=2;
-  		}
-  	}
-		
-  	return key;
+  protected static final int width = 30*2+2;
+
+  protected static ListMap strings;
+  protected static final StringBuffer bufs = new StringBuffer();
+
+  public static void initialize(boolean persist)
+  {
+    if (strings == null) strings = new ListMap("Stremebase_lexicon", width, DB.isPersisted());
   }
-  	
-	protected static int addChar(int chr, int previouscharKey, boolean completeWord)
-	{
-		long key = strings.getLargestKey()+1;
-		if (key<=Character.MAX_VALUE) key = Character.MAX_VALUE+1;
-		if (!completeWord) chr = -chr;
-		strings.put(key, 0, chr);
-		strings.put(key, 1, previouscharKey);		
-		return (int)key;
-	}
-	
-	public static long getIfExists(CharSequence word)
+
+  public static long[] useText(String sentence, String splitter, boolean put)
+  {
+    return useWords(put, sentence.split(splitter));
+  }
+
+  public static long[] useWords(boolean put, CharSequence... words)
+  {
+    long[] result = new long[words.length];
+    for (int i=0; i<result.length; i++) result[i] = useWord(words[i], put);
+    return result;
+  }
+
+  synchronized public static long useWord(CharSequence word, boolean put)
+  {		
+    if (word.length()==0)
+    {
+      if (!put) return DB.NULL;
+      throw new IllegalArgumentException("Puttin' on empty string");
+    }
+
+    if (word.length()==1) return word.charAt(0);
+
+    int key = word.charAt(0);
+
+    outerloop: for (int c = 1; c<word.length(); c++)
+    {	
+      int i = 0;
+      while (true)
+      {  			  			  			
+        long existing = strings.get(key, i+2);
+
+        if (existing==DB.NULL)	
+        { 				
+          if (!put) return DB.NULL;
+          strings.put(key, i+2, word.charAt(c));
+          final int nextPosition = addChar(word.charAt(c), key, c==word.length()-1);
+          strings.put(key, i+3, nextPosition);
+          key = nextPosition;
+          continue outerloop;
+        }
+        else
+        {  				
+          if (existing==word.charAt(c))
+          {
+            key = (int)strings.get(key, i+3);
+            if (put && c==word.length()-1) strings.put(key, 0, (int)existing);
+            continue outerloop;
+          }
+        }
+        i+=2;
+      }
+    }
+
+    return key;
+  }
+
+  protected static int addChar(int chr, int previouscharKey, boolean completeWord)
+  {
+    long key = strings.getLargestKey()+1;
+    if (key<=Character.MAX_VALUE) key = Character.MAX_VALUE+1;
+    if (!completeWord) chr = -chr;
+    strings.put(key, 0, chr);
+    strings.put(key, 1, previouscharKey);		
+    return (int)key;
+  }
+
+  public static long getIfExists(CharSequence word)
   {
     long key = useWord(word, false);
     if (key==DB.NULL) return key;
     if (strings.get(key, 0)>0) return key;
     return DB.NULL;
   }
-	
-	public static void getWord(long key, StringBuilder string)
+
+  public static void getWord(long key, StringBuilder string)
   {
-	  string.setLength(0);
-	  
-	  if (key<0)
-	  {
-	    string.append("DB.NULL");
-	    return;
-	  }
-	  
+    string.setLength(0);
+
+    if (key<0)
+    {
+      string.append("DB.NULL");
+      return;
+    }
+
     if (key > Character.MAX_VALUE && strings.get(key, 0)<0) return;
-    
+
     while (key > Character.MAX_VALUE)
     {     
       string.append((char)(Math.abs(strings.get(key, 0))));      
@@ -125,22 +125,22 @@ public class Lexicon
     string.append((char)key);
     string.reverse();
   }
-	
-	/*public static StringBuffer getWord(long key)
+
+  /*public static StringBuffer getWord(long key)
   {
 		buf.setLength(0);
 		if (key > Character.MAX_VALUE && strings.get(key, 0)<0) return buf;
-		
+
   	while (key > Character.MAX_VALUE)
   	{  		
   		buf.append((char)(Math.abs(strings.get(key, 0))));
-  	  
+
   	  key = strings.get(key, 1);
   	} 	
   	buf.append((char)key);
   	return buf.reverse();
   }
-	
+
 	public static String getText(long[] list)
   {
 		if (list.length == 0) return null;
@@ -148,15 +148,15 @@ public class Lexicon
 		for (long i: list) bufs.append(getWord(i).append(DB.db.TEXTBINDER));
 		return bufs.substring(0, bufs.length()-1);
   }*/
-	
-	public static LongStream wordsWithPrefix(CharSequence prefix)
-	{
-		long key = useWord(prefix, false);
-		if (key==DB.NULL) return LongStream.empty();
-		return StreamSupport.longStream(new WordSpliterator(key), false);
-	}
-	
-	/*protected static void getCompleteWords(long key)
+
+  public static LongStream wordsWithPrefix(CharSequence prefix)
+  {
+    long key = useWord(prefix, false);
+    if (key==DB.NULL) return LongStream.empty();
+    return StreamSupport.longStream(new WordSpliterator(key), false);
+  }
+
+  /*protected static void getCompleteWords(long key)
 	{
 		int i = 0;
 		while (true)

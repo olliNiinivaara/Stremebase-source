@@ -1,9 +1,6 @@
 package com.stremebase.map;
 
-import java.util.Arrays;
 import java.util.stream.LongStream;
-import java.util.stream.LongStream.Builder;
-
 import com.stremebase.base.DB;
 import com.stremebase.base.FixedMap;
 import com.stremebase.file.KeyFile;
@@ -23,10 +20,15 @@ public class ArrayMap extends FixedMap
   {
     super(mapName, size+1, DB.NOINDEX, DB.isPersisted());
   }
-  
+
   public ArrayMap(String mapName, int size, boolean persist)
   {
     super(mapName, size+1, DB.NOINDEX, persist);
+  }
+
+  public int getArrayLength()
+  {
+    return this.getNodeSize()-1;
   }
 
   /**
@@ -43,7 +45,7 @@ public class ArrayMap extends FixedMap
     if (!buf.setActive(base, false)) return;
 
     if (isIndexed()) throw new UnsupportedOperationException("indexing TBD");
-      //indexer.index(key, buf.read(base + 1), DB.NULL);
+    //indexer.index(key, buf.read(base + 1), DB.NULL);
   }
 
   /**
@@ -63,7 +65,7 @@ public class ArrayMap extends FixedMap
     buf.readToArray(base+1, values, nodeSize-1);
     return true;
   }
-  
+
   /**
    * Returns the values associated with the key, or null
    * 
@@ -77,7 +79,7 @@ public class ArrayMap extends FixedMap
     if (!get(key, values)) return null;
     return values;
   }
-  
+
   public long get(long key, int index)
   {
     KeyFile buf = getData(key, false);
@@ -86,7 +88,7 @@ public class ArrayMap extends FixedMap
     if (buf.read(base) == 0) return DB.NULL;
     return buf.read(base+1+index);
   }
-  
+
   /*
    * Returns the value associated with the key that is currently streamed with keys()
    * Usage:  map.keys().forEach(key -&gt; (map.value()...
@@ -139,7 +141,7 @@ public class ArrayMap extends FixedMap
     b.add(buf.read(base + 1));
     return b.build();
   }*/
-  
+
   @Override
   public LongStream values(long key)
   {
@@ -164,7 +166,7 @@ public class ArrayMap extends FixedMap
     }).forEach(key -> b.add(key));
     return b.build();*/
   }
-  
+
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
@@ -179,9 +181,22 @@ public class ArrayMap extends FixedMap
   }
 
   @Override
-  protected void put(long key, int index, long value)
+  public void put(long key, int index, long value)
   {
-    throw new UnsupportedOperationException("TBD");
+    //index...
+    if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
+    if (index < 0 || index>this.nodeSize) throw new IllegalArgumentException("Index out of range (" + index + ")");
+    KeyFile buf = getData(key, true);
+    int base = buf.base(key);
+    buf.setActive(base, true);
+    /*boolean olds = !buf.setActive(base, true);
+    if (isIndexed())
+    {
+      long oldValue = DB.NULL;
+      if (olds) oldValue = buf.read(base + 1);
+      indexer.index(key, oldValue, value);
+    }*/
+    buf.write(base+1+index, value);
   }
 
   @Override
