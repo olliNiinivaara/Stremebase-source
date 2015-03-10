@@ -91,14 +91,14 @@ public class DB
    * Writing to off-heap requires ordering the values, which is slow. Therefore modifications are cached
    * until there's a read operation, <code>MAXCACHEDSETSIZE</code> is hit, or java heap size becomes scarce.
    * <p>
-   * Default: 100000
+   * Default: 10000
    */
   public final int MAXCACHEDSETSIZE;
 
   /**
    * The maximum number of entries in each modified set value that are cached on-heap before written to off-heap.
    * <p>
-   * Default: 20000
+   * Default: 1000
    */
   public final int MAXCACHEDSETVALUEENTRIES;
 
@@ -191,8 +191,8 @@ public class DB
     MAXVALUEFILESIZE = 64 * INITIALVALUEFILESIZE;
 
     MAXCACHEDFREESLOTS = 100000;		
-    MAXCACHEDSETSIZE = 100000;
-    MAXCACHEDSETVALUEENTRIES = 20000;
+    MAXCACHEDSETSIZE = 10000;
+    MAXCACHEDSETVALUEENTRIES = 1000;
 
     MINIMUMRELATIONSHIPSIZE = 1000;
 

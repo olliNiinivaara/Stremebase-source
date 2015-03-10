@@ -16,21 +16,20 @@ import java.util.stream.Stream;
 
 import com.stremebase.base.DB;
 import com.stremebase.base.DynamicMap;
-import com.stremebase.base.util.Cache;
-import com.stremebase.base.util.Cache.CacheDropObserver;
+import com.stremebase.base.util.SetCache;
 import com.stremebase.file.FileManager.ValueSlot;
 import com.stremebase.file.KeyFile;
 import com.stremebase.file.ValueFile;
 
 
-public class SetMap extends DynamicMap implements CacheDropObserver
+public class SetMap extends DynamicMap
 {
   public static final byte SET = 0;
   public static final byte MULTISET = 1;
   public static final byte ATTRIBUTEDSET = 2;
 
   protected final byte type;
-  protected final Cache writeCache;
+  protected final SetCache setCache;
   protected final long[] overwriterCache = new long[2+DB.db.MAXCACHEDSETVALUEENTRIES*2];
 
   public class SetEntry
@@ -51,31 +50,26 @@ public class SetMap extends DynamicMap implements CacheDropObserver
   {
     super(mapName, 1000, DB.isPersisted());
     this.type = SET;
-    writeCache = new Cache(this);
+    setCache = new SetCache(this);
   }
 
-  public SetMap(String mapName, int defaultCapacity, byte type, boolean persist)
+  public SetMap(String mapName, byte type, boolean persist)
   {
-    super(mapName, defaultCapacity*3, persist);
+    super(mapName, 0, persist);
     this.type = type;
-    writeCache = new Cache(this);
+    setCache = new SetCache(this);
   }
-
-  private boolean committing;
 
   @Override
   public void commit()
   {
-    committing = true;
-    writeCache.notifyForAll();
-    writeCache.clear();
+    setCache.commitAll();
     super.commit();
-    committing = false;
   }
 
   protected long getLength(long key)
   {
-    notify(key, writeCache.get(key));
+    flush(key, setCache.get(key));
     return super.getSize(key)/2; 
   }
 
@@ -87,7 +81,7 @@ public class SetMap extends DynamicMap implements CacheDropObserver
 
   public long getAttribute(long key, long value)
   {
-    long[] set = (long[])writeCache.get(key);
+    long[] set = setCache.get(key);
     long cacheCount = 0;
     if (set!=null)
     {
@@ -111,8 +105,8 @@ public class SetMap extends DynamicMap implements CacheDropObserver
 
   public Stream<SetEntry> entries(long key)
   {
-    // long[] set = (long[])writeCache.get(key);
-    // if (set!=null) writeCached(key, set);
+    long[] set = setCache.get(key);
+    if (set!=null) writeCached(key, set);
 
     final byte[] index = new byte[1];
     index[0] = 0;
@@ -130,15 +124,15 @@ public class SetMap extends DynamicMap implements CacheDropObserver
       {
         entry[1] = value;
         index[0] = 0;
-        return true;
-        //return value != DB.NULL ? true : false;
+        //return true;
+        return value != DB.NULL ? true : false;
       }
     }).mapToObj(value -> {return new SetEntry(key, entry[0], entry[1]);});
   }
 
   public LongStream values(long key)
   {
-    long[] set = (long[])writeCache.get(key);
+    long[] set = setCache.get(key);
     if (set!=null) writeCached(key, set);
 
     final boolean[] isValue = new boolean[1];
@@ -166,11 +160,11 @@ public class SetMap extends DynamicMap implements CacheDropObserver
     if (key<0) throw new IllegalArgumentException("Negative keys are not supported ("+key+")");
     if (value==DB.NULL) throw new IllegalArgumentException("Value cannot be DB.NULL");
 
-    long[] set = (long[])writeCache.get(key);
+    long[] set = setCache.get(key);
     if (set==null)
     {
       set = new long[2+DB.db.MAXCACHEDSETVALUEENTRIES*2];
-      writeCache.put(key, set);
+      setCache.put(key, set);
     }
 
     if (set[0]==0)
@@ -188,11 +182,7 @@ public class SetMap extends DynamicMap implements CacheDropObserver
       set[0]+=2;
       set[(int)set[0]] = value;
       set[(int)(set[0]+1)] = attribute;
-      if (set[0]+2==set.length)
-      {
-        writeCache.notifyForKey(key);
-        writeCache.remove(key);
-      }
+      if (set[0]+2==set.length) setCache.commit(key);
       return;
     }
 
@@ -210,11 +200,7 @@ public class SetMap extends DynamicMap implements CacheDropObserver
     set[0]+=2;
     set[pos] = value;
     set[pos+1]=attribute;
-    if (set[0]+2==set.length)
-    {
-      writeCache.notifyForKey(key);
-      writeCache.remove(key);
-    }
+    if (set[0]+2==set.length) setCache.commit(key);
   }
 
   protected int findPosition(long[] array, int last, long element)
@@ -262,16 +248,15 @@ public class SetMap extends DynamicMap implements CacheDropObserver
   @Override
   public void remove(long key)
   {
-    writeCache.remove(key);
+    setCache.remove(key);
     super.remove(key);
   }
 
-  public boolean notify(long key, Object cached)
+  public void flush(long key, long[] value)
   {   
-    if (cached == null) return false;
-    if (((long[])cached)[0]==0) return false; 
-    writeCached(key, (long[])cached);
-    return !committing;
+    if (value == null) return;
+    if (value[0]==0) return;
+    writeCached(key, value);
   }
 
   protected void writeCached(long key, long[] cached)
@@ -291,42 +276,42 @@ public class SetMap extends DynamicMap implements CacheDropObserver
     header.setActive(base, true);
 
     final ValueSlot newSlot = DB.fileManager.getFreeSlot(mapGetter, cached[0]+oldLength);
+
     long newPos = newSlot.slotPosition;
 
     int cachePos = 2;
-    long currentNew = cached[cachePos];
-
     long newLength = 0;
 
-    ListIterator li = new ListIterator(key, oldLength, false);
-    while (li.hasNext())
+    if (oldLength>0)
     {
-      long oldValue = li.nextLong();
-      long oldAttribute = li.nextLong();
-
-      while (cachePos>=cached[0]+2 || oldValue<currentNew)
+      ListIterator li = new ListIterator(key, oldLength, false);
+      while (li.hasNext())
       {
-        if (oldAttribute!=DB.NULL)
-        {
-          newSlot.valueFile.write(newPos, oldValue);
-          newSlot.valueFile.write(newPos+1, oldAttribute);
-          newPos+=2;
-          newLength++;
-        }       
-        continue;
-      }
+        long oldValue = li.nextLong();
+        li.hasNext();
+        long oldAttribute = li.nextLong();
 
-      while (cachePos<cached[0]+2 && oldValue>currentNew)
-      {
-        if (cached[cachePos+1]!=DB.NULL)
+        if (cachePos>=cached[0]+2 || (cachePos<cached[0]+2 && oldValue<cached[cachePos]))
         {
-          newSlot.valueFile.write(newPos, currentNew);
-          newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
-          newPos+=2;
-          newLength++;
+          if (oldAttribute!=DB.NULL)
+          {
+            newSlot.valueFile.write(newPos, oldValue);
+            newSlot.valueFile.write(newPos+1, oldAttribute);
+            newPos+=2;
+            newLength++;
+          }       
         }
-        cachePos+=2;
-        if (cachePos<cached[0]+2) currentNew = cached[cachePos];
+        else
+        {
+          if (cached[cachePos+1]!=DB.NULL)
+          {
+            newSlot.valueFile.write(newPos, cached[cachePos]);
+            newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
+            newPos+=2;
+            newLength++;
+          }
+          cachePos+=2;
+        }
       }
     }
 
@@ -334,13 +319,14 @@ public class SetMap extends DynamicMap implements CacheDropObserver
     {
       if (cached[cachePos+1]!=DB.NULL)
       {
-        newSlot.valueFile.write(newPos, currentNew);
+        if (newSlot.valueFile == null) System.out.println("nyt gösähtää");
+
+        newSlot.valueFile.write(newPos, cached[cachePos]);
         newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
         newPos+=2;
         newLength++;
       }
       cachePos+=2;
-      if (cachePos<cached[0]+2) currentNew = cached[cachePos];
     }
 
     createHeader(key, newLength*2, newSlot);
@@ -368,6 +354,7 @@ public class SetMap extends DynamicMap implements CacheDropObserver
     if (header==null) return DB.NULL;
     int base = header.base(key);
     int end = (int)header.read(base+DynamicMap.pLength)-1;
+    if (end==-1) return DB.NULL;
     int valueBase = (int)header.read(base+DynamicMap.pSlotFilePosition); 
 
     ValueFile file = DB.fileManager.getValueFile(mapGetter, header.read(base+DynamicMap.pSlotFileId));

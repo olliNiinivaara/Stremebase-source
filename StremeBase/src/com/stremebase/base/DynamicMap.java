@@ -264,7 +264,7 @@ public abstract class DynamicMap extends FixedMap
     KeyFile header = getData(key, true);
     int base = header.base(key);
 
-    if (!header.setActive(base, true)) DB.fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));	
+    if (!header.setActive(base, true) && header.read(base+pSlotSize)>20) DB.fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));	
 
     header.write(base+pLength, length);
     header.write(base+pSlotSize, slotInfo.slotSize);

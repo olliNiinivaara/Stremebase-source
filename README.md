@@ -6,6 +6,9 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
+v.0.4.1 -- 2015-03-10  
+-Major bug fixed in SetMap
+
 v.0.4 -- 2015-03-09  
 -ArrayMap  
 -ListMap  
