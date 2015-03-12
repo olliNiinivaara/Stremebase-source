@@ -11,6 +11,7 @@
 
 package com.stremebase.map;
 
+import java.util.Arrays;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
@@ -51,6 +52,12 @@ public class SetMap extends DynamicMap
       if (attribute < e.attribute) return -1;
       if (attribute == e.attribute) return 0;
       return 1;
+    }
+
+    @Override
+    public String toString()
+    {
+      return key+":"+value+":"+attribute;
     }
   }
 
@@ -398,14 +405,72 @@ public class SetMap extends DynamicMap
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
-    // TODO Auto-generated method stub
-    return null;
+    LongStream.Builder b =  LongStream.builder();
+
+    keys().filter(key ->
+    {
+      return values(key).anyMatch(value -> (value!= DB.NULL && value >= lowestValue && value<=highestValue));
+    }).forEach(key -> b.add(key));
+
+    return b.build();
   }
 
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
-    // TODO Auto-generated method stub
-    return null;
+    LongStream.Builder b =  LongStream.builder();
+
+    keys().filter(key ->
+    {
+      for (long value: values)
+      {
+        if (fileAttribute(key, value, DB.NULL, false)!=DB.NULL) return true;
+      }
+      return false;
+    }).forEach(key -> b.add(key));
+
+    return b.build();
+  }
+
+  public Stream<SetEntry> attributeQuery(long lowestAttribute, long highestAttribute)
+  {
+    return scanningAttributeQuery(lowestAttribute, highestAttribute);
+  }
+
+  public Stream<SetEntry> scanningAttributeQuery(long lowestAttribute, long highestAttribute)
+  {
+    Stream.Builder<SetEntry> b =  Stream.builder();
+
+    keys().forEach(key ->
+    {
+      entries(key).filter(entry ->
+      {
+        return (entry.attribute!= DB.NULL && entry.attribute >= lowestAttribute && entry.attribute<=highestAttribute);
+      }).forEach(entry -> b.add(entry));
+    });
+
+    return b.build();
+  }
+
+  public Stream<SetEntry> attributeUnionQuery(long... attributes)
+  {
+    return scanningAttributeUnionQuery(attributes);
+  }
+
+  public Stream<SetEntry> scanningAttributeUnionQuery(long... attributes)
+  {
+    Arrays.sort(attributes);
+
+    Stream.Builder<SetEntry> b =  Stream.builder();
+
+    keys().forEach(key ->
+    {
+      entries(key).filter(entry ->
+      {
+        return (Arrays.binarySearch(attributes, entry.attribute)>=0);
+      }).forEach(entry -> b.add(entry));
+    });
+
+    return b.build();
   }
 }
