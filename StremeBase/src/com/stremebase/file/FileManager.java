@@ -225,7 +225,8 @@ public class FileManager
         file = createNewValueFile(property, requiredSize);
       }
     }
-    return new ValueSlot(file, file.getAndSetEof(requiredSize), requiredSize);
+    slot = new ValueSlot(file, file.getAndSetEof(requiredSize), requiredSize);
+    return slot;
   }
 
   protected ValueFile createNewValueFile(MapGetter property, long requiredSize)
@@ -247,35 +248,30 @@ public class FileManager
     if (slotSize == null) return null;
     List<ValueSlot> slotBag = slots.get(slotSize);
     if (slotBag==null || slotBag.size() == 0) return null;
+    cachedFreeSlots--;
     return slotBag.remove(slotBag.size()-1);
   }
 
   public void releaseSlot(MapGetter property, long fileId, long slotSize, long slotPosition)
   {		
-    if (slotSize<4) return;
+    if (slotSize<2) return;
 
     TreeMap<Long, List<ValueSlot>> slots = property.getFreeValueSlots();
 
-    List<ValueSlot> slotBag;
-    Long position = slots.ceilingKey(slotSize);
-    if (position == null)
+    if (cachedFreeSlots >= DB.db.MAXCACHEDFREESLOTS)
     {
-      position = slotSize;
-      slotBag = new ArrayList<ValueSlot>();
-      slots.put(position, slotBag);
-    }
-    else
-    {
-      slotBag = slots.get(position);
-      if (cachedFreeSlots >= DB.db.MAXCACHEDFREESLOTS)
-      {
-        Long smallest = slots.firstKey();
-        if (position == smallest) return;
-        cachedFreeSlots -= slots.get(smallest).size();
-        slots.remove(smallest);
-      }
+      Long smallest = slots.firstKey();
+      if (slotSize == smallest) return;
+      cachedFreeSlots -= slots.get(smallest).size();
+      slots.remove(smallest);
     }
 
+    List<ValueSlot> slotBag = slots.get(slotSize);
+    if (slotBag==null)
+    {
+      slotBag = new ArrayList<ValueSlot>();
+      slots.put(slotSize, slotBag);
+    }
     slotBag.add(new ValueSlot(getValueFile(property, fileId), slotPosition, slotSize));
     cachedFreeSlots++;
   }
