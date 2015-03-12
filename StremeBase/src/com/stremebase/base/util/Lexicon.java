@@ -37,6 +37,11 @@ public class Lexicon
     if (strings == null) strings = new ListMap("Stremebase_lexicon", width, DB.isPersisted());
   }
 
+  public static void commit()
+  {
+    strings.commit();
+  }
+
   public static long[] useText(String sentence, String splitter, boolean put)
   {
     return useWords(put, sentence.split(splitter));

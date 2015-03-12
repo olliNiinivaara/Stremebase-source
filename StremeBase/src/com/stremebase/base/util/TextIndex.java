@@ -17,6 +17,7 @@ public class TextIndex
 
   public void commit()
   {
+    Lexicon.commit();
     setMap.commit();
   }
 
