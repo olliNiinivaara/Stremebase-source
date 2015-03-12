@@ -32,7 +32,7 @@ public class SetMap extends DynamicMap
   protected final SetCache setCache;
   protected final long[] overwriterCache = new long[2+DB.db.MAXCACHEDSETVALUEENTRIES*2];
 
-  public class SetEntry
+  public class SetEntry implements Comparable<SetEntry>
   {
     public final long key;
     public final long value;
@@ -43,6 +43,14 @@ public class SetMap extends DynamicMap
       this.key = key;
       this.value = value;
       this.attribute = attribute;
+    }
+
+    @Override
+    public int compareTo(SetEntry e)
+    {
+      if (attribute < e.attribute) return -1;
+      if (attribute == e.attribute) return 0;
+      return 1;
     }
   }
 
@@ -264,6 +272,7 @@ public class SetMap extends DynamicMap
     //TODO index
 
     KeyFile header = getData(key, false);
+
     if (header!=null)
     {
       overWrite(key, cached);
@@ -275,7 +284,7 @@ public class SetMap extends DynamicMap
     final long oldLength = super.getSize(key);
     header.setActive(base, true);
 
-    final ValueSlot newSlot = DB.fileManager.getFreeSlot(mapGetter, cached[0]+oldLength);
+    final ValueSlot newSlot = DB.fileManager.getFreeSlot(mapGetter, cached[0]+oldLength+2);
 
     long newPos = newSlot.slotPosition;
 
@@ -319,8 +328,6 @@ public class SetMap extends DynamicMap
     {
       if (cached[cachePos+1]!=DB.NULL)
       {
-        if (newSlot.valueFile == null) System.out.println("nyt gösähtää");
-
         newSlot.valueFile.write(newPos, cached[cachePos]);
         newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
         newPos+=2;
@@ -328,7 +335,6 @@ public class SetMap extends DynamicMap
       }
       cachePos+=2;
     }
-
     createHeader(key, newLength*2, newSlot);
   }
 

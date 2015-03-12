@@ -125,7 +125,7 @@ public class DB
    * Default: * (asterisk)
    * see stremebase.property.api.Text#getKeysContainingWords(CharSequence... words)
    */
-  //public final char WILDENDING;
+  public final char WILDENDING;
 
   public final ZoneId ZONE;
 
@@ -198,7 +198,7 @@ public class DB
 
     //DEFAULTTEXTSPLITTER = " ";
     TEXTBINDER = ' ';
-    //WILDENDING = '*';
+    WILDENDING = '*';
 
     ZONE = ZoneId.systemDefault();
   }
@@ -260,5 +260,11 @@ public class DB
   {
     fileManager.clearAll();
     if (persisted) FileManager.deleteDir(new File(DIRECTORY));
+  }
+
+  public boolean exists()
+  {
+    if (!persisted) return false;
+    return new File(DIRECTORY).exists();
   }
 }

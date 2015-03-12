@@ -22,46 +22,46 @@ import com.stremebase.file.FileManager.ValueSlot;
 
 public class MapGetter
 {
-	protected final FixedMap map;
-	
-	MapGetter(FixedMap map)
-	{
-	  this.map = map;	
-	}
-	
-	public FixedMap map()
-	{
-		return map;
-	}
-		
-	public long getNodeSize()
-	{
-		return map.nodeSize;
-	}
-	
-	public long getLargestValueFileId()
-	{
-	  return map.largestValueFileId;	
-	}
+  protected final FixedMap map;
 
-	public long getNextValueFileId()
-	{
-	  if (map.largestValueFileId==DB.NULL) map.largestValueFileId = 0;
-		return ++map.largestValueFileId;	
-	}
+  MapGetter(FixedMap map)
+  {
+    this.map = map;	
+  }
 
-	public TreeMap<Long, KeyFile> getKeyFiles()
-	{
+  public FixedMap map()
+  {
+    return map;
+  }
+
+  public long getNodeSize()
+  {
+    return map.nodeSize;
+  }
+
+  public long getLargestValueFileId()
+  {
+    return map.largestValueFileId;	
+  }
+
+  public long getNextValueFileId()
+  {
+    if (map.largestValueFileId==DB.NULL) map.largestValueFileId = 0;
+    return ++map.largestValueFileId;	
+  }
+
+  public TreeMap<Long, KeyFile> getKeyFiles()
+  {
     return map.keyFiles;
-	}
-	
-	public Map<Long, ValueFile> getValueFiles()
-	{
-    return map.valueFiles;
-	}
-	
-	public TreeMap<Long, List<ValueSlot>> getFreeValueSlots()
-	{
-		return map.getFreeValueSlots();
-	}
+  }
+
+  public Map<Long, ValueFile> getValueFiles()
+  {
+    return ((DynamicMap)map).valueFiles;
+  }
+
+  public TreeMap<Long, List<ValueSlot>> getFreeValueSlots()
+  {
+    return map.getFreeValueSlots();
+  }
 }

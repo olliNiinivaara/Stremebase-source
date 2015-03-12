@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import com.stremebase.base.DB;
-import com.stremebase.base.FixedMap;
+import com.stremebase.base.DynamicMap;
 import com.stremebase.base.MapGetter;
 
 
@@ -73,13 +73,13 @@ public class FileManager
     dir.delete();
   }	
 
-  public String getDirectory(MapGetter pd, char type)
+  public String getDirectory(MapGetter pd, char type, boolean create)
   {
     String dir = DB.db.DIRECTORY+pd.map().getMapName()+File.separatorChar+type+File.separatorChar;
     if (DB.isPersisted())
     {
       File f = new File(dir);
-      if (!f.exists()) f.mkdirs();
+      if (create && !f.exists()) f.mkdirs();
     }
     return dir;
   }
@@ -91,7 +91,7 @@ public class FileManager
     if (pd.map().isPersisted())
     {
       loadKeyFiles(pd);
-      if (!(pd.map() instanceof FixedMap)) return loadValueFiles(pd);
+      if (pd.map() instanceof DynamicMap) return loadValueFiles(pd);
     }
     return DB.NULL;
   }
@@ -150,7 +150,7 @@ public class FileManager
   protected void loadKeyFiles(MapGetter pd)
   {
     TreeMap<Long, KeyFile> files = pd.getKeyFiles();
-    String dir = getDirectory(pd, 'K');
+    String dir = getDirectory(pd, 'K', false);
     File[] fileList = new File(dir).listFiles();
     if (fileList ==null) return;
     for (File f: fileList)
@@ -164,7 +164,8 @@ public class FileManager
   protected long loadValueFiles(MapGetter pd)
   {
     Map<Long, ValueFile> files = pd.getValueFiles();
-    String dir = getDirectory(pd, 'V');
+
+    String dir = getDirectory(pd, 'V', false);
     File[] fileList = new File(dir).listFiles();
     if (fileList ==null) return DB.NULL;
 
@@ -193,7 +194,7 @@ public class FileManager
     KeyFile result = property.getKeyFiles().get(fileId);
     if (nodeSize!=DB.NULL && result == null)
     {
-      String fileName = getDirectory(property, 'K')+"db"+fileId+".db";
+      String fileName = getDirectory(property, 'K', true)+"db"+fileId+".db";
       result = new KeyFile(fileId, fileName, nodeSize, property.map().isPersisted());	
       property.getKeyFiles().put(fileId, result);
     }
@@ -209,11 +210,7 @@ public class FileManager
   public ValueSlot getFreeSlot(MapGetter property, long requiredSize)
   {
     ValueSlot slot = findSlot(property, requiredSize);
-    if (slot!=null)
-    {
-      if (slot.valueFile == null) System.out.println("palautetaan olematonta...");
-      return slot;
-    }
+    if (slot!=null) return slot;
 
     long fileId = property.getLargestValueFileId();
     ValueFile file;
@@ -223,7 +220,7 @@ public class FileManager
       file = getValueFile(property, fileId);
       if (file.getRemainingCapacity()<requiredSize)
       {
-        //TODO vapautetaanko kahesti (myös primitivelistmapista?)
+        //TODO vapautetaanko kahesti (myös dynamicmap, ei setmap?)
         releaseSlot(property, fileId, file.getRemainingCapacity(), file.getCapacity() -  file.getRemainingCapacity());
         file = createNewValueFile(property, requiredSize);
       }
@@ -234,7 +231,7 @@ public class FileManager
   protected ValueFile createNewValueFile(MapGetter property, long requiredSize)
   {
     long fileId = property.getNextValueFileId();
-    String fileName = getDirectory(property, 'V')+"db"+fileId+".db";
+    String fileName = getDirectory(property, 'V', true)+"db"+fileId+".db";
     if (requiredSize < DB.db.INITIALVALUEFILESIZE<<(fileId-1)) requiredSize = DB.db.INITIALVALUEFILESIZE<<(fileId-1);
     ValueFile file = new ValueFile(fileId, fileName, requiredSize, property.map().isPersisted());		
     Map<Long, ValueFile> files = property.getValueFiles();
@@ -255,6 +252,8 @@ public class FileManager
 
   public void releaseSlot(MapGetter property, long fileId, long slotSize, long slotPosition)
   {		
+    if (slotSize<4) return;
+
     TreeMap<Long, List<ValueSlot>> slots = property.getFreeValueSlots();
 
     List<ValueSlot> slotBag;

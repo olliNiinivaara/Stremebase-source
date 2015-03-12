@@ -53,7 +53,7 @@ public abstract class DynamicMap extends FixedMap
     super.close();
     if (!persisted || freeValueSlots == null) return;
     FileOutputStream fos;
-    String free = DB.fileManager.getDirectory(mapGetter, 'F')+"free.ser";
+    String free = DB.fileManager.getDirectory(mapGetter, 'F', true)+"free.ser";
     try
     {
       fos = new FileOutputStream(free);
@@ -80,7 +80,7 @@ public abstract class DynamicMap extends FixedMap
     }
 
     FileManager.loadingProperty = mapGetter;
-    File free = new File(DB.fileManager.getDirectory(mapGetter, 'F')+"free.ser");
+    File free = new File(DB.fileManager.getDirectory(mapGetter, 'F', false)+"free.ser");
     if (!free.exists())
     {
       freeValueSlots = new TreeMap<Long, List<ValueSlot>>();
@@ -264,7 +264,7 @@ public abstract class DynamicMap extends FixedMap
     KeyFile header = getData(key, true);
     int base = header.base(key);
 
-    if (!header.setActive(base, true) && header.read(base+pSlotSize)>20) DB.fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));	
+    if (!header.setActive(base, true)) DB.fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));  
 
     header.write(base+pLength, length);
     header.write(base+pSlotSize, slotInfo.slotSize);
@@ -288,7 +288,7 @@ public abstract class DynamicMap extends FixedMap
     return slot;
   }
 
-  protected int position;
+  private int position;
 
   protected ValueFile getSlot(long key)
   {

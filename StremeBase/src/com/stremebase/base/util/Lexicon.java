@@ -12,6 +12,9 @@
 package com.stremebase.base.util;
 
 
+import java.util.Spliterator;
+import java.util.Stack;
+import java.util.function.LongConsumer;
 import java.util.stream.LongStream;
 import java.util.stream.StreamSupport;
 
@@ -25,6 +28,9 @@ public class Lexicon
 
   protected static ListMap strings;
   protected static final StringBuffer bufs = new StringBuffer();
+
+  private static final Lexicon instance = new Lexicon();
+  private Lexicon() {}
 
   public static void initialize(boolean persist)
   {
@@ -126,54 +132,63 @@ public class Lexicon
     string.reverse();
   }
 
-  /*public static StringBuffer getWord(long key)
-  {
-		buf.setLength(0);
-		if (key > Character.MAX_VALUE && strings.get(key, 0)<0) return buf;
-
-  	while (key > Character.MAX_VALUE)
-  	{  		
-  		buf.append((char)(Math.abs(strings.get(key, 0))));
-
-  	  key = strings.get(key, 1);
-  	} 	
-  	buf.append((char)key);
-  	return buf.reverse();
-  }
-
-	public static String getText(long[] list)
-  {
-		if (list.length == 0) return null;
-		bufs.setLength(0);
-		for (long i: list) bufs.append(getWord(i).append(DB.db.TEXTBINDER));
-		return bufs.substring(0, bufs.length()-1);
-  }*/
-
   public static LongStream wordsWithPrefix(CharSequence prefix)
   {
     long key = useWord(prefix, false);
     if (key==DB.NULL) return LongStream.empty();
-    return StreamSupport.longStream(new WordSpliterator(key), false);
+    return StreamSupport.longStream(instance.new WordSpliterator(key), false);
   }
 
-  /*protected static void getCompleteWords(long key)
-	{
-		int i = 0;
-		while (true)
-		{
-			final long existing = strings.get(key, i+2);
-			if (existing==0 || existing == DB.NULL)
-			{
-				if (i==0) DB.out(getWord(key));
-				return;
-			}
-			else
-			{
-				if (strings.get(key, 0)>0) DB.out(getWord(key));
-				getCompleteWords(strings.get(key, i+3));
-			}
-			i+=2;
-			if (i>=strings.getSize(key)-1) return;
-		}
-	}*/
+  private class WordSpliterator implements Spliterator.OfLong
+  {     
+    protected final Stack<Long> stack = new Stack<>();
+
+    protected WordSpliterator(long key)
+    {
+      stack.clear();
+      stack.push(key);
+    }
+
+    @Override
+    public long estimateSize()
+    {
+      return Long.MAX_VALUE;
+    }
+
+    @Override
+    public int characteristics()
+    {
+      return DISTINCT | IMMUTABLE | NONNULL;
+    }
+
+    @Override
+    public java.util.Spliterator.OfLong trySplit()
+    {
+      return null;
+    }
+
+    @Override
+    public boolean tryAdvance(LongConsumer action)
+    {
+      while (true)
+      {
+        if (stack.isEmpty()) return false;
+        long key = stack.pop();
+        int i = 0;
+        while (true)
+        {
+          final long existing = Lexicon.strings.get(key, i+2);
+          if (existing==0 || existing == DB.NULL) break;
+          stack.push(Lexicon.strings.get(key, i+3));
+          i+=2;
+        }
+
+        if (Lexicon.strings.get(key, 0)>0)
+        {
+          action.accept(key);
+          return true;
+        }
+      }
+    }
+  } 
 }
