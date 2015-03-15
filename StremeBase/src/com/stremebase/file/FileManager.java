@@ -110,18 +110,19 @@ public class FileManager
     TreeMap<Long, KeyFile> kFiles = property.getKeyFiles();
     for (KeyFile kF: kFiles.values()) kF.delete();
     kFiles.clear();
-    //new File(getDirectory(property, 'K')).delete();
 
-    Map<Long, ValueFile> vFiles = property.getValueFiles();
-    for (ValueFile vF: vFiles.values()) vF.delete();
-    vFiles.clear();
-    //new File(getDirectory(property, 'V')).delete();
-
-    TreeMap<Long, List<ValueSlot>> slots = property.getFreeValueSlots();
-    if (slots!=null)
+    if (property.map() instanceof DynamicMap)
     {
-      for (List<ValueSlot> slotBag: slots.values()) cachedFreeSlots-=slotBag.size();
-      slots.clear();
+      Map<Long, ValueFile> vFiles = property.getValueFiles();
+      for (ValueFile vF: vFiles.values()) vF.delete();
+      vFiles.clear();
+
+      TreeMap<Long, List<ValueSlot>> slots = property.getFreeValueSlots();
+      if (slots!=null)
+      {
+        for (List<ValueSlot> slotBag: slots.values()) cachedFreeSlots-=slotBag.size();
+        slots.clear();
+      }
     }
 
     if (property.map().isPersisted()) deleteDir(new File(DB.db.DIRECTORY+property.map().getMapName()));

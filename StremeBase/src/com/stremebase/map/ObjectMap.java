@@ -43,12 +43,6 @@ public class ObjectMap extends DynamicMap
     return deSerialize(o);
   }
 
-  @Override
-  public Object getObject(long key)
-  {
-    return get(key);
-  }
-
   public void put(long key, Object value)
   {
     final long[] array =  serialize(value);

@@ -132,29 +132,15 @@ public class DB
   //----------------------------------------------------------------
 
   /**
-   * This map constructor parameter tells that the map is not to be indexed.
-   */
-  public static final int NOINDEX = 0;
-
-  /**
-   * This map constructor parameter tells that the map will be indexed and same value will not appear multiple times for any key.
-   */
-  public static final int SIMPLEINDEX = 1;
-
-  /**
-   * This map constructor parameter tells that the map will be indexed and appearances of same values per key are counted.
-   */
-  public static final int MULTIINDEX = 2;
-
-  /**
    * A constant indicating that the value is missing.
    */
   public static final long NULL = Long.MIN_VALUE;
 
-  /**
-   * DB.NULL value as String.
-   *
-	public static final String NULLLONG = Long.toString(NULL);*/
+  public static final int ONE_TO_ONE = 0;
+
+  public static final int MANY_TO_ONE = 1;
+
+  public static final int ONE_TO_MANY = 2;
 
   private static boolean persisted = true;
 
@@ -166,13 +152,13 @@ public class DB
 
   /**
    * The singleton FileManager instance.
-   * For internal use.
+   * For internal use only.
    */
   public static final FileManager fileManager = new FileManager();
 
   /**
    * Access to the singleton DB instance at run-time.
-   * For internal use.
+   * Mainly for internal use.
    */
   public static DB db;
 

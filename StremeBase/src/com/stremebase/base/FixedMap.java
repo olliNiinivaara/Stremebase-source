@@ -37,7 +37,7 @@ public abstract class FixedMap
   protected final int nodeSize;
   protected final boolean persisted;
 
-  protected final Indexer indexer; 
+  protected Indexer indexer; 
 
   protected final TreeMap<Long, KeyFile> keyFiles = new TreeMap<>();
   protected final HashMap<Long, ValueFile> valueFiles = new HashMap<>();
@@ -51,7 +51,7 @@ public abstract class FixedMap
   /*
    * Used only internally.
    */
-  public FixedMap(String mapName, int nodeSize, int indexType, boolean persist)
+  public FixedMap(String mapName, int nodeSize, boolean persist)
   {						
     this.mapName = mapName+nodeSize;
     this.nodeSize = nodeSize;
@@ -59,10 +59,19 @@ public abstract class FixedMap
     this.mapGetter = new MapGetter(this);
 
     largestValueFileId = DB.fileManager.loadProperty(mapGetter);
-    if (indexType==DB.SIMPLEINDEX) indexer = new Indexer(this, nodeSize, false, persist);
-    else if (indexType==DB.MULTIINDEX) indexer = new Indexer(this, nodeSize, true, persist);
-    else indexer = null;
+  }
 
+  public void addIndex(int indexType)
+  {
+    if (indexer!=null) return;
+    indexer = new Indexer(indexType, this);
+  }
+
+  public void dropIndex()
+  {
+    if (indexer==null) return;
+    indexer.clear();
+    indexer = null;
   }
 
   /**
@@ -256,13 +265,13 @@ public abstract class FixedMap
   public LongStream query(long lowestValue, long highestValue)
   {			
     if (!isIndexed()) return scanningQuery(lowestValue, highestValue);
-    return indexer.keysContainingValue(lowestValue, highestValue);
+    return indexer.getKeysWithValueFromRange(lowestValue, highestValue);
   }
 
   public LongStream unionQuery(long...values)
   {     
-    /*if (!isIndexed())*/ return scanningUnionQuery(values);
-    //return indexer.keysContainingValue(lowestValue, highestValue);
+    if (!isIndexed()) return scanningUnionQuery(values);
+    return indexer.getKeysWithValueFromSet(values);
   }
 
   /**
@@ -311,8 +320,6 @@ public abstract class FixedMap
   abstract protected int indexOf(long key, int fromIndex, long value);
   abstract protected LongStream scanningQuery(long lowestValue, long highestValue);
   abstract protected LongStream scanningUnionQuery(long... values);
-  abstract protected Object getObject(long key);
-
 
   //------------------------------------------------------------------------------
 

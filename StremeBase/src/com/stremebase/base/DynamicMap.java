@@ -44,7 +44,7 @@ public abstract class DynamicMap extends FixedMap
 
   protected DynamicMap(String mapName, int defaultCapacity, boolean persist)
   {
-    super(mapName, 5, DB.NOINDEX, persist);
+    super(mapName, 5, persist);
     this.defaultCapacity = defaultCapacity;
   }
 
@@ -304,12 +304,6 @@ public abstract class DynamicMap extends FixedMap
   {
     for (int i=0; i<values.length; i++)
       slotInfo.valueFile.write((int)slotInfo.slotPosition+i, values[i]);
-  }
-
-  @Override
-  protected Object getObject(long key)
-  {
-    return values(key);
   }
 
   //---------------------------------------------------------------

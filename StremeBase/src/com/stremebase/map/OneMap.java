@@ -32,12 +32,19 @@ public class OneMap extends FixedMap
    */
   public OneMap(String mapName)
   {
-    super(mapName, 2, DB.NOINDEX, DB.isPersisted());
+    super(mapName, 2, DB.isPersisted());
   }
-  
+
   public OneMap(String mapName, boolean persist)
   {
-    super(mapName, 2, DB.NOINDEX, persist);
+    super(mapName, 2, persist);
+  }
+
+  public void addIndex(int indexType)
+  {
+    if ((indexType != DB.ONE_TO_ONE) && (indexType != DB.MANY_TO_ONE))
+      throw new IllegalArgumentException(indexType + "Indextype must be either DB.ONE_TO_ONE or DB.MANY_TO_ONE");
+    super.addIndex(indexType);
   }
 
   /**
@@ -55,8 +62,7 @@ public class OneMap extends FixedMap
     if (!buf.setActive(base, false))
       return;
 
-    if (isIndexed())
-      indexer.index(key, buf.read(base + 1), DB.NULL);
+    if (isIndexed()) indexer.index(key, buf.read(base + 1), DB.NULL);
   }
 
   /**
@@ -77,7 +83,7 @@ public class OneMap extends FixedMap
       return DB.NULL;
     return buf.read(base + 1);
   }
-  
+
   /**
    * Returns the value associated with the key that is currently streamed with keys()
    * Usage:  map.keys().forEach(key -&gt; (map.value()...
@@ -130,11 +136,11 @@ public class OneMap extends FixedMap
     return b.build();
   }
 
-  @Override
+  /*@Override
   protected Object getObject(long key)
   {
     return get(key);
-  }
+  }*/
 
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
@@ -147,7 +153,7 @@ public class OneMap extends FixedMap
     }).forEach(key -> b.add(key));
     return b.build();
   }
-  
+
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {

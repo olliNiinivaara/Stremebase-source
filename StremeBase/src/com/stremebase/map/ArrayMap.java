@@ -1,13 +1,17 @@
 package com.stremebase.map;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.LongStream;
 import com.stremebase.base.DB;
 import com.stremebase.base.FixedMap;
+import com.stremebase.base.Indexer;
 import com.stremebase.file.KeyFile;
 
 public class ArrayMap extends FixedMap
 {
-
+  protected final Map<Integer, Indexer> indices = new HashMap<>();
   /**
    * Creates a new ArrayMap for associating an array of values with one key.
    * The returned map is not indexed.
@@ -18,17 +22,35 @@ public class ArrayMap extends FixedMap
    */
   public ArrayMap(String mapName, int size)
   {
-    super(mapName, size+1, DB.NOINDEX, DB.isPersisted());
+    super(mapName, size+1, DB.isPersisted());
   }
 
   public ArrayMap(String mapName, int size, boolean persist)
   {
-    super(mapName, size+1, DB.NOINDEX, persist);
+    super(mapName, size+1, persist);
   }
 
   public int getArrayLength()
   {
     return this.getNodeSize()-1;
+  }
+
+  public void addIndex(int indexType)
+  {
+    if (indexer!=null) return;
+    if (indexType == DB.ONE_TO_ONE || indexType == DB.MANY_TO_ONE)
+      throw new IllegalArgumentException("This indextype can be used only for single cells (method addIndextoCell)");
+
+    indexer = new Indexer(indexType, this);
+  }
+
+  public void addIndextoCell(int indexType, int cell)
+  {
+    if (indices.containsKey(cell)) return;
+    if (indexType != DB.ONE_TO_ONE && indexType != DB.MANY_TO_ONE)
+      throw new IllegalArgumentException("For single cells, indextype must be either DB.ONE_TO_ONE or DB.MANY_TO_ONE");
+
+    indices.put(cell, new Indexer(indexType, this, cell));
   }
 
   /**
@@ -44,8 +66,8 @@ public class ArrayMap extends FixedMap
     int base = buf.base(key);
     if (!buf.setActive(base, false)) return;
 
-    if (isIndexed()) throw new UnsupportedOperationException("indexing TBD");
-    //indexer.index(key, buf.read(base + 1), DB.NULL);
+    if (isIndexed()) indexer.remove(key);
+    for (Indexer celli: indices.values()) celli.remove(key);
   }
 
   /**
@@ -124,79 +146,71 @@ public class ArrayMap extends FixedMap
     buf.write(base+1, values);
   }
 
-  /*
+  @Override
+  public void put(long key, int index, long value)
+  {
+    if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
+    if (index < 0 || index>this.nodeSize) throw new IllegalArgumentException("Index out of range (" + index + ")");
+    KeyFile buf = getData(key, true);
+    int base = buf.base(key);
+    boolean olds = !buf.setActive(base, true);
+    if (isIndexed() || indices.containsKey(index))
+    {
+      long oldValue = DB.NULL;
+      if (olds) oldValue = buf.read(base + index + 1);
+      if (isIndexed()) indexer.index(key, oldValue, value);
+      Indexer celli = indices.get(index);
+      if (celli!=null) celli.index(key, oldValue, value);
+    }
+    buf.write(base+1+index, value);
+  }
+
+  /**
    * Returns the value associated with a key as a {@link LongStream}
    * 
    * @param key
    *          the key
    * @return the value or an empty stream if there's no value
-   *
+   */
   @Override
   public LongStream values(long key)
   {
     KeyFile buf = getData(key, false);
     if (buf == null) return LongStream.empty();
     int base = buf.base(key);
-    Builder b = LongStream.builder();
-    b.add(buf.read(base + 1));
+    LongStream.Builder b = LongStream.builder();
+    for (int i=1; i<nodeSize; i++) b.add(buf.read(base + i));
     return b.build();
-  }*/
-
-  @Override
-  public LongStream values(long key)
-  {
-    throw new UnsupportedOperationException("TBD");
-  }
-
-  @Override
-  protected Object getObject(long key)
-  {
-    return get(key);
   }
 
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
-    throw new UnsupportedOperationException("TBD");
-    /*Builder b = LongStream.builder();
+    //TODO: read arrays
+    LongStream.Builder b =  LongStream.builder();
+
     keys().filter(key ->
     {
-      if (iteratedValue < lowestValue || iteratedValue > highestValue) return false;
-      return true;
+      return values(key).anyMatch(value -> (value!= DB.NULL && value >= lowestValue && value<=highestValue));
     }).forEach(key -> b.add(key));
-    return b.build();*/
+
+    return b.build();
   }
 
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
-    throw new UnsupportedOperationException("TBD");
-    /*Arrays.sort(values);    
-    Builder b = LongStream.builder();
+    //TODO: read arrays
+
+    Arrays.sort(values);
+    LongStream.Builder b =  LongStream.builder();
+
     keys().filter(key ->
     {
-      return Arrays.binarySearch(values, iteratedValue)>=0 ? true : false;
+      return values(key).anyMatch(value -> (Arrays.binarySearch(values, value)>=0 ? true : false));
     }).forEach(key -> b.add(key));
-    return b.build();*/
-  }
 
-  @Override
-  public void put(long key, int index, long value)
-  {
-    //index...
-    if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
-    if (index < 0 || index>this.nodeSize) throw new IllegalArgumentException("Index out of range (" + index + ")");
-    KeyFile buf = getData(key, true);
-    int base = buf.base(key);
-    buf.setActive(base, true);
-    /*boolean olds = !buf.setActive(base, true);
-    if (isIndexed())
-    {
-      long oldValue = DB.NULL;
-      if (olds) oldValue = buf.read(base + 1);
-      indexer.index(key, oldValue, value);
-    }*/
-    buf.write(base+1+index, value);
+    return b.build();
   }
 
   @Override
