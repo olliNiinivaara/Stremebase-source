@@ -62,7 +62,7 @@ public class OneMap extends FixedMap
     if (!buf.setActive(base, false))
       return;
 
-    if (isIndexed()) indexer.index(key, buf.read(base + 1), DB.NULL);
+    if (isIndexed()) indexer.remove(key, buf.read(base + 1));
   }
 
   /**
@@ -111,9 +111,8 @@ public class OneMap extends FixedMap
     boolean olds = !buf.setActive(base, true);
     if (isIndexed())
     {
-      long oldValue = DB.NULL;
-      if (olds) oldValue = buf.read(base + 1);
-      indexer.index(key, oldValue, value);
+      if (olds) indexer.remove(key, buf.read(base + 1));
+      indexer.index(key, value);
     }
     buf.write(base + 1, value);
   }

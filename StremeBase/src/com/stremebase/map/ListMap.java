@@ -22,7 +22,7 @@ public class ListMap extends DynamicMap
   {
     long result = super.get(key, 0);
     if (result==DB.NULL) return -1;
-    return (int)result;
+    return (int)result-1;
   }
 
   public void push(long key, long value)
@@ -34,17 +34,17 @@ public class ListMap extends DynamicMap
 
   public long pop(long key)
   {
-    int position = getTailPosition(key);
-    while (position >= 0)
+    int position = getTailPosition(key)+1;
+    while (position > 0)
     {
-      if (super.get(key, position+1)==DB.NULL) position--;
+      if (super.get(key, position)==DB.NULL) position--;
       else
       {
         super.put(key, 0, position-1);
-        return super.get(key, position+1);
+        return super.get(key, position);
       }
     }
-    super.put(key, 0, -1);
+    super.put(key, 0, 0);
     return DB.NULL;
   }
 
@@ -91,6 +91,6 @@ public class ListMap extends DynamicMap
   @Override
   public LongStream values(long key)
   {
-    return super.values(key, true);
+    return super.values(key, true, true);
   }
 }

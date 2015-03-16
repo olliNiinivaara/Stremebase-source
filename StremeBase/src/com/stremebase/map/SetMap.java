@@ -33,6 +33,9 @@ public class SetMap extends DynamicMap
   protected final SetCache setCache;
   protected final long[] overwriterCache = new long[2+DB.db.MAXCACHEDSETVALUEENTRIES*2];
 
+  private static final long NOTWRITTEN = DB.NULL;
+  private static final long WRITTEN = 0;
+
   public class SetEntry implements Comparable<SetEntry>
   {
     public final long key;
@@ -127,7 +130,7 @@ public class SetMap extends DynamicMap
     index[0] = 0;
     final long[] entry = new long[2];
 
-    return super.values(key, false).filter(value ->
+    return super.values(key, false, false).filter(value ->
     {
       if (index[0]==0)
       {
@@ -154,7 +157,7 @@ public class SetMap extends DynamicMap
     isValue[0] = true;
     final long[] theValue = new long[1]; 
 
-    return super.values(key, false).filter(value ->
+    return super.values(key, false, false).filter(value ->
     {
       if (isValue[0])
       {
@@ -300,7 +303,7 @@ public class SetMap extends DynamicMap
 
     if (oldLength>0)
     {
-      ListIterator li = new ListIterator(key, oldLength, false);
+      ListIterator li = new ListIterator(key, oldLength, false, false);
       while (li.hasNext())
       {
         long oldValue = li.nextLong();
@@ -325,6 +328,7 @@ public class SetMap extends DynamicMap
             newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
             newPos+=2;
             newLength++;
+            if (isIndexed()) indexer.index(key, cached[cachePos]);
           }
           cachePos+=2;
         }
@@ -339,6 +343,7 @@ public class SetMap extends DynamicMap
         newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
         newPos+=2;
         newLength++;
+        if (isIndexed()) indexer.index(key, cached[cachePos]);
       }
       cachePos+=2;
     }
@@ -353,10 +358,12 @@ public class SetMap extends DynamicMap
     for (int i=2; i<overwriterCache[0]+2; i+=2)
     {
       long written = fileAttribute(key, overwriterCache[i], overwriterCache[i+1], true);
-      if (written==1) continue;
-      cached[(int) cached[0]+2] = overwriterCache[i];
-      cached[(int) cached[0]+3] = overwriterCache[i+1];
-      cached[0]+=2;
+      if (written==NOTWRITTEN)
+      {
+        cached[(int) cached[0]+2] = overwriterCache[i];
+        cached[(int) cached[0]+3] = overwriterCache[i+1];
+        cached[0]+=2;
+      }
     }
     if (cached[0]==0) cached[0] = DB.NULL;
   }
@@ -387,19 +394,31 @@ public class SetMap extends DynamicMap
       {
         long attribute = file.read(valueBase+test+1);
         if (!write) return attribute;
-        if (newAttribute==DB.NULL || type!=MULTISET) file.write(valueBase+test+1, newAttribute);
+
+        if (DB.NULL == newAttribute && DB.NULL == attribute) return WRITTEN;
+        if (type!=MULTISET && newAttribute == attribute) return WRITTEN;
+
+        if (type!=MULTISET) file.write(valueBase+test+1, newAttribute);
         else
         {
-          if (attribute==DB.NULL) attribute = newAttribute; else attribute+=newAttribute;
-          file.write(valueBase+test+1, attribute);
+          if (attribute==DB.NULL) file.write(valueBase+test+1, newAttribute); 
+          else if (newAttribute==DB.NULL) file.write(valueBase+test+1, DB.NULL);
+          else file.write(valueBase+test+1, attribute+newAttribute);
         }
-        return 1;
+
+        if (isIndexed())
+        {
+          if (newAttribute == DB.NULL) indexer.remove(key, attribute);
+          else indexer.index(key, newAttribute);
+        }
+
+        return WRITTEN;
       }
 
       if (currentValue < value) start = test+2; else end = test;
     }
 
-    return DB.NULL;
+    return NOTWRITTEN;
   }
 
   @Override

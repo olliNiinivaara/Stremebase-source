@@ -63,11 +63,12 @@ public class ArrayMap extends FixedMap
   {
     KeyFile buf = getData(key, false);
     if (buf == null) return;
-    int base = buf.base(key);
-    if (!buf.setActive(base, false)) return;
 
-    if (isIndexed()) indexer.remove(key);
-    for (Indexer celli: indices.values()) celli.remove(key);
+    if (isIndexed()) values(key).forEach(value -> indexer.remove(key, value));
+    for (int cell: indices.keySet()) indices.get(cell).remove(key, get(key, cell));
+
+    int base = buf.base(key);
+    buf.setActive(base, false);
   }
 
   /**
@@ -158,9 +159,18 @@ public class ArrayMap extends FixedMap
     {
       long oldValue = DB.NULL;
       if (olds) oldValue = buf.read(base + index + 1);
-      if (isIndexed()) indexer.index(key, oldValue, value);
+      if (isIndexed())
+      {
+        if (oldValue!=DB.NULL) indexer.remove(key, oldValue);
+        if (value!=DB.NULL) indexer.index(key, value);
+      }
+
       Indexer celli = indices.get(index);
-      if (celli!=null) celli.index(key, oldValue, value);
+      if (celli!=null)
+      {
+        if (oldValue!=DB.NULL) celli.remove(key, oldValue);
+        if (value!=DB.NULL) celli.index(key, value);
+      }
     }
     buf.write(base+1+index, value);
   }

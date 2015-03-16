@@ -30,6 +30,7 @@ import com.stremebase.file.FileManager;
 import com.stremebase.file.KeyFile;
 import com.stremebase.file.ValueFile;
 import com.stremebase.file.FileManager.ValueSlot;
+import com.stremebase.map.ListMap;
 
 
 public abstract class DynamicMap extends FixedMap
@@ -128,7 +129,10 @@ public abstract class DynamicMap extends FixedMap
       long[] newList = new long[index+1];
       newList[index] = value;
       putToNewSlot(key, newList);
-      if (isIndexed()) indexer.index(key, DB.NULL, value);
+      if (isIndexed() && (!(this instanceof ListMap) || index>0))
+      {
+        if (value!=DB.NULL) indexer.index(key, value);
+      }
       header.setActive(base, true);
       return;
     }
@@ -161,7 +165,11 @@ public abstract class DynamicMap extends FixedMap
 
     if (oldValue!=value)
     {
-      if (isIndexed()) indexer.index(key, oldValue, value);
+      if (isIndexed() && (!(this instanceof ListMap) || index>0))
+      {
+        if (oldValue!=DB.NULL) indexer.remove(key, oldValue);
+        if (value!=DB.NULL) indexer.index(key, value);
+      }
     }
   }
 
@@ -182,9 +190,9 @@ public abstract class DynamicMap extends FixedMap
 
   public void remove(long key)
   {
-    if (isIndexed()) indexer.remove(key);
     KeyFile header = getData(key, false);
     if (header==null) return;
+    if (isIndexed()) values(key).forEach(value -> indexer.remove(key, value));
     header.setActive(header.base(key), false);
     ValueFile slot = getSlot(key);
     if (slot!=null) releaseSlot(key);
@@ -235,12 +243,12 @@ public abstract class DynamicMap extends FixedMap
     return Arrays.equals(list, values);
   }
 
-  public LongStream values(long key, boolean skipNulls)
+  protected LongStream values(long key, boolean skipNulls, boolean list)
   {
-    return StreamSupport.longStream(spliterator(key, skipNulls), false);
+    return StreamSupport.longStream(spliterator(key, skipNulls, list), false);
   }
 
-  public Spliterator.OfLong spliterator(long key, boolean skipNulls)
+  public Spliterator.OfLong spliterator(long key, boolean skipNulls, boolean list)
   {		
     long length = 0; 
     KeyFile header = getData(key, false);
@@ -248,9 +256,9 @@ public abstract class DynamicMap extends FixedMap
     int base = header.base(key);
     if (header.read(base)==0) return Spliterators.emptyLongSpliterator();
     length = header.read(base+pLength);
-    if (length==0) return Spliterators.emptyLongSpliterator();
+    if (length==0) return Spliterators.emptyLongSpliterator();   
 
-    return Spliterators.spliterator(new ListIterator(key, length, skipNulls), length,
+    return Spliterators.spliterator(new ListIterator(key, length, skipNulls, list), length,
         java.util.Spliterator.IMMUTABLE | java.util.Spliterator.NONNULL | java.util.Spliterator.ORDERED);
 
     /*if (parallel)	return Spliterators.spliterator(new ListIterator(key, length, skipNulls), length,
@@ -316,11 +324,16 @@ public abstract class DynamicMap extends FixedMap
     long current = DB.NULL;
     final boolean skipNulls;
 
-    public ListIterator(long key, long length, boolean skipNulls)
+    public ListIterator(long key, long length, boolean skipNulls, boolean list)
     {
       slot = getSlot(key);
+      if (list)
+      {
+        remaining = (int)slot.read(position);
+        position+=1;
+      }
+      else remaining = (int)length;
       pos = position;
-      remaining = (int)length;
       this.skipNulls = skipNulls;
     }
 
