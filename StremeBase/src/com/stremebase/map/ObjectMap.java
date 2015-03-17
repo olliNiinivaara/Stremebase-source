@@ -29,6 +29,11 @@ public class ObjectMap extends DynamicMap
     super (mapName, 10000, DB.isPersisted());
   }
 
+  public void addIndex(int indexType)
+  {
+    throw new IllegalArgumentException("ObjectMap does not support indexing.");
+  }
+
   public boolean containsValue(Object value)
   {
     long[] o = serialize(value);

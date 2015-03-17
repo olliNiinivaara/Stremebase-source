@@ -29,7 +29,7 @@ public class ListMap extends DynamicMap
   {
     int position = getTailPosition(key)+1;
     super.put(key, position+1, value);
-    super.put(key, 0, position);
+    super.put(key, 0, position+1);
   }
 
   public long pop(long key)

@@ -44,6 +44,24 @@ public class ArrayMap extends FixedMap
     indexer = new Indexer(indexType, this);
   }
 
+  public void commit()
+  {
+    for (Indexer i: indices.values()) i.commit();
+    super.commit();
+  }
+
+  public void close()
+  {
+    for (Indexer i: indices.values()) i.close();
+    super.close();
+  }
+
+  public void clear()
+  {
+    for (Indexer i: indices.values()) i.clear();
+    super.clear();
+  }
+
   public void addIndextoCell(int indexType, int cell)
   {
     if (indices.containsKey(cell)) return;
@@ -51,6 +69,14 @@ public class ArrayMap extends FixedMap
       throw new IllegalArgumentException("For single cells, indextype must be either DB.ONE_TO_ONE or DB.MANY_TO_ONE");
 
     indices.put(cell, new Indexer(indexType, this, cell));
+  }
+
+  public void dropIndexFromCell(int cell)
+  {
+    Indexer i = indices.get(cell);
+    if (i == null) return;
+    i.clear();    
+    indices.put(cell, null);
   }
 
   /**

@@ -144,6 +144,8 @@ public class DB
 
   public static final int MANY_TO_MANY = 3;
 
+  public static final int MANY_TO_MULTIMANY = 4;
+
   private static boolean persisted = true;
 
   /**

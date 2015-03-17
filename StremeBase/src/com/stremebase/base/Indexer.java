@@ -53,7 +53,8 @@ public class Indexer
     if (cell == null) cell = "";
     if ((type == DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) posi = new OneMap(map.getMapName()+"_posIndex"+cell, map.persisted);
     else  if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) posi = new SetMap(map.getMapName()+"_posIndex", SetMap.SET, map.persisted);
-    else throw new UnsupportedOperationException("not implemented yet");
+    else  if (type == DB.MANY_TO_MULTIMANY) posi = new SetMap(map.getMapName()+"_posIndex", SetMap.MULTISET, map.persisted);
+    else throw new IllegalArgumentException("Unrecognized index type: "+type);
     return posi;
   }
 
@@ -68,11 +69,6 @@ public class Indexer
     if ((type==DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) return getKeysWithValueFromRange_ONE_TO(lowestValue, highestValue);
     else if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) return getKeysWithValueFromRange_MANY_TO(lowestValue, highestValue);
     else throw new UnsupportedOperationException("not implemented yet");
-
-    /*if (lowestValue>=0 || !neg) return posIndex.keys(lowestValue, highestValue).flatMap(key -> {return posIndex.get(key);});
-		if (highestValue<0) return negIndex.keys(-highestValue, -lowestValue).flatMap(key -> {return negIndex.get(key);});
-		return LongStream.concat(negIndex.keys(0, -lowestValue).flatMap(key -> {return negIndex.get(key);}),
-		 posIndex.keys(0, highestValue).flatMap(key -> {return posIndex.get(key);}));*/
   }
 
   public LongStream getKeysWithValueFromRange_ONE_TO(long lowestValue, long highestValue)
@@ -119,13 +115,8 @@ public class Indexer
   public LongStream getKeysWithValueFromSet(long... values)
   {
     if ((type==DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) return getKeysWithValueFromSet_ONE_TO(values);
-    else if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) return getKeysWithValueFromSet_MANY_TO(values);
-    else throw new UnsupportedOperationException("not implemented yet");
-
-    /*if (lowestValue>=0 || !neg) return posIndex.keys(lowestValue, highestValue).flatMap(key -> {return posIndex.get(key);});
-    if (highestValue<0) return negIndex.keys(-highestValue, -lowestValue).flatMap(key -> {return negIndex.get(key);});
-    return LongStream.concat(negIndex.keys(0, -lowestValue).flatMap(key -> {return negIndex.get(key);}),
-     posIndex.keys(0, highestValue).flatMap(key -> {return posIndex.get(key);}));*/
+    else if (type==DB.MANY_TO_MULTIMANY) return getKeysWithValueFromSet_MULTIMANY(values, 1, Long.MAX_VALUE); 
+    else return getKeysWithValueFromSet_MANY_TO(values);
   }
 
   public LongStream getKeysWithValueFromSet_ONE_TO(long... values)
@@ -148,9 +139,28 @@ public class Indexer
 
   public LongStream getKeysWithValueFromSet_MANY_TO(long... values)
   {
+    if (type==DB.MANY_TO_MULTIMANY) return LongStream.of(values).flatMap(value ->
+    {
+      if (value>=0) return ((SetMap)posIndex).values(value);
+      throw new UnsupportedOperationException("not implemented yet");
+    });
+
     return LongStream.of(values).flatMap(value ->
     {
       if (value>=0) return ((SetMap)posIndex).values(value);
+      throw new UnsupportedOperationException("not implemented yet");
+    });
+  }
+
+  public LongStream getKeysWithValueFromSet_MULTIMANY(long[] values, long min, long max)
+  {
+    return LongStream.of(values).flatMap(value ->
+    {
+      if (value>=0) return ((SetMap)posIndex).entries(value).filter(entry -> 
+      {
+        return entry.attribute>=min && entry.attribute<=max;
+      }).mapToLong(entry -> {return entry.value;});
+
       throw new UnsupportedOperationException("not implemented yet");
     });
   }
@@ -172,49 +182,21 @@ public class Indexer
         ((OneMap)negIndex).put(-newValue, key);
       }
     }
-    else if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY)
+    else
     {
       if (newValue>=0) ((SetMap)posIndex).put(newValue, key);
       else
       {
         if (!neg)
         {
-          negIndex = new SetMap(map.getMapName()+"_negIndex", SetMap.SET, map.persisted);
+          byte setType = type == DB.MANY_TO_MULTIMANY ? SetMap.MULTISET : SetMap.SET;
+          negIndex = new SetMap(map.getMapName()+"_negIndex", setType, map.persisted);
           neg = true;
         }
         ((SetMap)negIndex).put(-newValue, key);
       }
     }
-    else throw new UnsupportedOperationException("not implemented yet");
-    /* if (newValue<0)
-    {
-      throw new UnsupportedOperationException("not implemented yet");
-      if (!neg)
-      { 				
-        negIndex = new LongSetMap(map.getMapName()+"_negIndex", intitialSize, posIndex.multiset, false, map.isPersisted());
-        neg = true;
-      }
-      negIndex.put(-newValue, key);
-    }*/	
   }
-
-  /*public void removeOneValue(long key, long value)
-  {
-    if (value<0)
-    {
-      //if (neg) negIndex.removeOneValue(-value, key);
-    }
-    //else posIndex.removeOneValue(value, key);
-  }
-
-  public void resetValue(long key, long value)
-  {
-    if (value<0)
-    {
-      //if (neg) negIndex.resetValue(-value, key);
-    }
-    //else posIndex.resetValue(value, key);
-  }*/
 
   public void remove(long key, long oldValue)
   {
@@ -225,33 +207,12 @@ public class Indexer
       if (oldValue>=0) posIndex.remove(oldValue);
       else if (neg)negIndex.remove(-oldValue);
     }
-    else if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY)
+    else
     {
       if (oldValue>=0) ((SetMap)posIndex).remove(oldValue, key);
       else if (neg) ((SetMap)negIndex).remove(-oldValue, key);
     }
-    else throw new UnsupportedOperationException("not implemented yet");
   }
-
-  /* public void remove(long key, LongStream values)
-  {
-    if (posIndex instanceof OneMap)
-    {
-      values.forEach(value ->
-      {
-        if (value>=0) ((OneMap)posIndex).remove(value);
-        else if (neg && value!=DB.NULL) ((OneMap)negIndex).remove(-value);
-      });
-    }
-    else
-    {   
-      values.forEach(value ->
-      {
-        if (value>=0) ((SetMap)posIndex).remove(value, key);
-        else if (neg  && value!=DB.NULL) ((SetMap)negIndex).remove(-value, key);
-      });
-    }
-  }*/
 
   public void clear()
   {
