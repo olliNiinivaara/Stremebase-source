@@ -6,38 +6,42 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
+v.0.6 -- 2015-03-17
+- Indexing  
+
+
 v.0.5 -- 2015-03-12
-- Text Retrieval
+- Text Retrieval  
 
 
 v.0.4.3 -- 2015-03-12
-- New storage slot recycler
+- New storage slot recycler  
 
 
 v.0.4.2 -- 2015-03-12
-- More bug fixes
+- More bug fixes  
 
 
 v.0.4.1 -- 2015-03-10
-- Major bug fixed in SetMap
+- Major bug fixed in SetMap  
 
 
 v.0.4 -- 2015-03-09
 - ArrayMap
 - ListMap
-- SetMap
+- SetMap  
 
 
 v.0.3  --  2015-02-04
 - String handling
 - Object serialization
-- DynamicMap
+- DynamicMap  
 
 
-v.0.2  --  2015-01-23  
+v.0.2  --  2015-01-23
 No more LongMap, but...:
 - OneMap: A map for associating a long with a long
-- To: Convert common data types to longs and back
+- To: Convert common data types to longs and back  
 
 
 v.0.1  --  2015-01-01
