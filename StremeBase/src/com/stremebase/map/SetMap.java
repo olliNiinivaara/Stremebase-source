@@ -85,7 +85,7 @@ public class SetMap extends DynamicMap
     super.commit();
   }
 
-  public void addIndex(int indexType)
+  public void addIndex(byte indexType)
   {
     if (indexType == DB.MANY_TO_MULTIMANY)
       throw new IllegalArgumentException("SetMap does not support DB.MANY_TO_MULTIMANY indexing.");

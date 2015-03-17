@@ -35,7 +35,7 @@ public class ArrayMap extends FixedMap
     return this.getNodeSize()-1;
   }
 
-  public void addIndex(int indexType)
+  public void addIndex(byte indexType)
   {
     if (indexer!=null) return;
     if (indexType == DB.ONE_TO_ONE || indexType == DB.MANY_TO_ONE)
@@ -62,7 +62,7 @@ public class ArrayMap extends FixedMap
     super.clear();
   }
 
-  public void addIndextoCell(int indexType, int cell)
+  public void addIndextoCell(byte indexType, int cell)
   {
     if (indices.containsKey(cell)) return;
     if (indexType != DB.ONE_TO_ONE && indexType != DB.MANY_TO_ONE)

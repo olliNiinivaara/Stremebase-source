@@ -2,6 +2,7 @@ package com.stremebase.map;
 
 import java.util.Arrays;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import com.stremebase.base.DB;
 import com.stremebase.base.DynamicMap;
@@ -55,10 +56,22 @@ public class ListMap extends DynamicMap
     if (index+1>getTailPosition(key)) super.put(key, 0, index+1);
   }
 
+  public void put(long key, int index, long... values)
+  {
+    for (int i = 0; i<values.length; i++) super.put(key, index+i+1, values[i]);
+    if (values.length>getTailPosition(key)) super.put(key, 0, values.length);
+  }
+
   @Override
   public long get(long key, int index)
   {
     return super.get(key, index+1);
+  }
+
+  @Override
+  public LongStream values(long key)
+  {
+    return super.values(key, true, true);
   }
 
   @Override
@@ -88,9 +101,20 @@ public class ListMap extends DynamicMap
     return b.build();
   }
 
-  @Override
-  public LongStream values(long key)
+  public Stream<SetMap.SetEntry> indexQuery(long lowestValue, long highestValue, long lowestCount, long highestCount)
   {
-    return super.values(key, true, true);
+    if (!isIndexed()) throw new IllegalArgumentException("IndexQuery needs a DB.MANY_TO_MULTIMANY index.");
+    if (indexer.type!=DB.MANY_TO_MULTIMANY) throw new IllegalArgumentException("IndexQuery works only with a DB.MANY_TO_MULTIMANY index.");
+
+    return indexer.indexQuery(lowestValue, highestValue, lowestCount, highestCount);
   }
+
+  public Stream<SetMap.SetEntry> indexUnionQuery(long[] values, long lowestCount, long highestCount)
+  {
+    if (!isIndexed()) throw new IllegalArgumentException("IndexQuery needs a DB.MANY_TO_MULTIMANY index.");
+    if (indexer.type!=DB.MANY_TO_MULTIMANY) throw new IllegalArgumentException("IndexQuery works only with a DB.MANY_TO_MULTIMANY index.");
+
+    return indexer.indexUnionQuery(values, lowestCount, highestCount);
+  }
+
 }

@@ -61,7 +61,7 @@ public abstract class FixedMap
     largestValueFileId = DB.fileManager.loadProperty(mapGetter);
   }
 
-  public void addIndex(int indexType)
+  public void addIndex(byte indexType)
   {
     if (indexer!=null) return;
     indexer = new Indexer(indexType, this);

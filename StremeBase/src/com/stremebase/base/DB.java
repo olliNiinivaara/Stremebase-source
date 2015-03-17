@@ -136,15 +136,15 @@ public class DB
    */
   public static final long NULL = Long.MIN_VALUE;
 
-  public static final int ONE_TO_ONE = 0;
+  public static final byte ONE_TO_ONE = 0;
 
-  public static final int MANY_TO_ONE = 1;
+  public static final byte MANY_TO_ONE = 1;
 
-  public static final int ONE_TO_MANY = 2;
+  public static final byte ONE_TO_MANY = 2;
 
-  public static final int MANY_TO_MANY = 3;
+  public static final byte MANY_TO_MANY = 3;
 
-  public static final int MANY_TO_MULTIMANY = 4;
+  public static final byte MANY_TO_MULTIMANY = 4;
 
   private static boolean persisted = true;
 

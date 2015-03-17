@@ -40,7 +40,7 @@ public class OneMap extends FixedMap
     super(mapName, 2, persist);
   }
 
-  public void addIndex(int indexType)
+  public void addIndex(byte indexType)
   {
     if ((indexType != DB.ONE_TO_ONE) && (indexType != DB.MANY_TO_ONE))
       throw new IllegalArgumentException(indexType + "Indextype must be either DB.ONE_TO_ONE or DB.MANY_TO_ONE");

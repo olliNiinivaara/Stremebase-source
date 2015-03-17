@@ -13,6 +13,7 @@
 package com.stremebase.base;
 
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 import java.util.stream.LongStream.Builder;
 
 import com.stremebase.map.OneMap;
@@ -23,15 +24,14 @@ import com.stremebase.map.SetMap;
 
 public class Indexer
 {
-  private final int type;
-  private final FixedMap map;
+  public final byte type;
 
-  //private final int intitialCapacity;
+  private final FixedMap map;
   private final FixedMap posIndex;
   private boolean neg = false;
   private FixedMap negIndex;
 
-  public Indexer(int type, FixedMap map)
+  public Indexer(byte type, FixedMap map)
   {
     this.type = type;
     this.map = map;
@@ -39,7 +39,7 @@ public class Indexer
 
   }
 
-  public Indexer(int type, FixedMap map, int cell)
+  public Indexer(byte type, FixedMap map, int cell)
   {
     if (type != DB.ONE_TO_ONE && type != DB.MANY_TO_ONE) throw new IllegalArgumentException("Single cell can only be indexed with DB.ONE_TO_ONE or DB.MANY_TO_ONE");
     this.type = type;
@@ -64,14 +64,15 @@ public class Indexer
     if (neg) negIndex.commit();
   }
 
-  public LongStream getKeysWithValueFromRange(long lowestValue, long highestValue)
+  public LongStream getKeysWithValueFromRange(final long lowestValue, final long highestValue)
   {
     if ((type==DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) return getKeysWithValueFromRange_ONE_TO(lowestValue, highestValue);
     else if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) return getKeysWithValueFromRange_MANY_TO(lowestValue, highestValue);
-    else throw new UnsupportedOperationException("not implemented yet");
+    else if (type==DB.MANY_TO_MULTIMANY) return indexQuery(lowestValue, highestValue, 1, Long.MAX_VALUE).mapToLong(entry -> {return entry.value;});
+    else throw new IllegalArgumentException("Unrecognized index type: "+type);
   }
 
-  public LongStream getKeysWithValueFromRange_ONE_TO(long lowestValue, long highestValue)
+  public LongStream getKeysWithValueFromRange_ONE_TO(long lowestValue, final long highestValue)
   {
     if (lowestValue>=0 || !neg)
     {
@@ -92,7 +93,7 @@ public class Indexer
     return LongStream.concat(negStream, posStream);
   }
 
-  public LongStream getKeysWithValueFromRange_MANY_TO(long lowestValue, long highestValue)
+  public LongStream getKeysWithValueFromRange_MANY_TO(long lowestValue, final long highestValue)
   {
     if (lowestValue>=0 || !neg)
     {
@@ -112,14 +113,51 @@ public class Indexer
     return LongStream.concat(negStream, posStream);
   }
 
-  public LongStream getKeysWithValueFromSet(long... values)
+  public Stream<SetMap.SetEntry> indexQuery(long lowestValue, final long highestValue, final long lowestCount, final long highestCount)
+  {
+    Stream<SetMap.SetEntry> negStream;
+    Stream<SetMap.SetEntry> posStream = null;
+    long positiveLowest = 0;
+    long negativeHighest = -1;
+
+    if (highestValue>=0) 
+    {
+      if (lowestValue>0) positiveLowest = lowestValue;
+      posStream = posIndex.keys(positiveLowest, highestValue).
+          <Stream<SetMap.SetEntry>>mapToObj(value ->
+          {
+            return ((SetMap)posIndex).entries(value).filter(entry -> 
+            {
+              return entry.attribute>=lowestCount && entry.attribute<=highestCount;
+            });
+          }).flatMap(stream -> {return stream;});
+    }
+
+    if (lowestValue>=0 || !neg) return posStream;
+
+    if (highestValue<0) negativeHighest = highestValue;
+    negStream = negIndex.keys(-negativeHighest, -lowestValue).
+        <Stream<SetMap.SetEntry>>mapToObj(value ->
+        {
+          return ((SetMap)posIndex).entries(value).filter(entry -> 
+          {
+            return entry.attribute>=lowestCount && entry.attribute<=highestCount;
+          });
+        }).flatMap(stream -> {return stream;});
+
+    if (highestValue<0) return negStream;
+
+    return Stream.concat(negStream, posStream);
+  }
+
+  public LongStream getKeysWithValueFromSet(final long... values)
   {
     if ((type==DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) return getKeysWithValueFromSet_ONE_TO(values);
-    else if (type==DB.MANY_TO_MULTIMANY) return getKeysWithValueFromSet_MULTIMANY(values, 1, Long.MAX_VALUE); 
+    else if (type==DB.MANY_TO_MULTIMANY) return indexUnionQuery(values, 1, Long.MAX_VALUE).mapToLong(entry -> {return entry.value;});
     else return getKeysWithValueFromSet_MANY_TO(values);
   }
 
-  public LongStream getKeysWithValueFromSet_ONE_TO(long... values)
+  public LongStream getKeysWithValueFromSet_ONE_TO(final long... values)
   {
     Builder b = LongStream.builder();
 
@@ -131,38 +169,38 @@ public class Indexer
         long key = ((OneMap)posIndex).get(value);
         if (key!=DB.NULL) b.add(key);
       }
-      else throw new UnsupportedOperationException("not implemented yet");
+      else
+      {
+        if (!neg) continue;
+        long key = ((OneMap)negIndex).get(-value);
+        if (key!=DB.NULL) b.add(key);
+      }
     }
 
     return b.build();
   }
 
-  public LongStream getKeysWithValueFromSet_MANY_TO(long... values)
+  public LongStream getKeysWithValueFromSet_MANY_TO(final long... values)
   {
-    if (type==DB.MANY_TO_MULTIMANY) return LongStream.of(values).flatMap(value ->
-    {
-      if (value>=0) return ((SetMap)posIndex).values(value);
-      throw new UnsupportedOperationException("not implemented yet");
-    });
-
     return LongStream.of(values).flatMap(value ->
     {
+      if (value==DB.NULL) return LongStream.empty();
       if (value>=0) return ((SetMap)posIndex).values(value);
-      throw new UnsupportedOperationException("not implemented yet");
+      if (!neg) return LongStream.empty();
+      return ((SetMap)negIndex).values(-value);
     });
   }
 
-  public LongStream getKeysWithValueFromSet_MULTIMANY(long[] values, long min, long max)
+  public Stream<SetMap.SetEntry> indexUnionQuery(final long[] values, final long lowestCount, final long highestCount)
   {
-    return LongStream.of(values).flatMap(value ->
-    {
-      if (value>=0) return ((SetMap)posIndex).entries(value).filter(entry -> 
-      {
-        return entry.attribute>=min && entry.attribute<=max;
-      }).mapToLong(entry -> {return entry.value;});
+    Stream.Builder<SetMap.SetEntry> b = Stream.builder();
 
-      throw new UnsupportedOperationException("not implemented yet");
-    });
+    for (long value: values)
+    {
+      if (value==DB.NULL) continue;
+      indexQuery(value, value, lowestCount, highestCount).forEach(entry -> b.add(entry));
+    }
+    return b.build();
   }
 
   public void index(long key, long newValue)
