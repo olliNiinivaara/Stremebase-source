@@ -19,6 +19,14 @@ public class ListMap extends DynamicMap
     super(mapName, initialCapacity, persist);
   }
 
+  @Override
+  public void reIndex()
+  {
+    indexer.clear();
+    keys().forEach(key -> (values(key).forEach(value -> (indexer.index(key, value)))));
+    indexer.commit();
+  }
+
   public int getTailPosition(long key)
   {
     long result = super.get(key, 0);
@@ -77,28 +85,21 @@ public class ListMap extends DynamicMap
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
-    LongStream.Builder b =  LongStream.builder();
-
-    keys().filter(key ->
+    return keys().filter(key ->
     {
       return values(key).anyMatch(value -> (value!= DB.NULL && value >= lowestValue && value<=highestValue));
-    }).forEach(key -> b.add(key));
-
-    return b.build();
+    });
   }
 
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
     Arrays.sort(values);
-    LongStream.Builder b =  LongStream.builder();
 
-    keys().filter(key ->
+    return keys().filter(key ->
     {
       return values(key).anyMatch(value -> (Arrays.binarySearch(values, value)>=0 ? true : false));
-    }).forEach(key -> b.add(key));
-
-    return b.build();
+    });
   }
 
   public Stream<SetMap.SetEntry> indexQuery(long lowestValue, long highestValue, long lowestCount, long highestCount)
@@ -106,14 +107,16 @@ public class ListMap extends DynamicMap
     if (!isIndexed()) throw new IllegalArgumentException("IndexQuery needs a DB.MANY_TO_MULTIMANY index.");
     if (indexer.type!=DB.MANY_TO_MULTIMANY) throw new IllegalArgumentException("IndexQuery works only with a DB.MANY_TO_MULTIMANY index.");
 
+    if (isIndexQuerySorted()) return indexer.indexQuery(lowestValue, highestValue, lowestCount, highestCount).sorted();
     return indexer.indexQuery(lowestValue, highestValue, lowestCount, highestCount);
   }
 
   public Stream<SetMap.SetEntry> indexUnionQuery(long[] values, long lowestCount, long highestCount)
   {
-    if (!isIndexed()) throw new IllegalArgumentException("IndexQuery needs a DB.MANY_TO_MULTIMANY index.");
-    if (indexer.type!=DB.MANY_TO_MULTIMANY) throw new IllegalArgumentException("IndexQuery works only with a DB.MANY_TO_MULTIMANY index.");
+    if (!isIndexed()) throw new IllegalArgumentException("indexUnionQuery needs a DB.MANY_TO_MULTIMANY index.");
+    if (indexer.type!=DB.MANY_TO_MULTIMANY) throw new IllegalArgumentException("indexUnionQuery works only with a DB.MANY_TO_MULTIMANY index.");
 
+    if (isIndexQuerySorted()) return indexer.indexUnionQuery(values, lowestCount, highestCount).sorted(); 
     return indexer.indexUnionQuery(values, lowestCount, highestCount);
   }
 

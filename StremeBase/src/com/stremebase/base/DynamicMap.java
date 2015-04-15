@@ -33,7 +33,7 @@ import com.stremebase.file.FileManager.ValueSlot;
 import com.stremebase.map.ListMap;
 
 
-public abstract class DynamicMap extends FixedMap
+public abstract class DynamicMap extends StremeMap
 {										
   protected static final int pLength = 1;
   protected static final int pSlotSize = 2;

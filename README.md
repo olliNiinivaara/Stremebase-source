@@ -6,6 +6,10 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
+v.0.6.1 -- 2015-04-15
+- Reindexing (on-the-fly add + drop index)  
+
+
 v.0.6 -- 2015-03-17
 - Indexing  
 
@@ -23,7 +27,7 @@ v.0.4.2 -- 2015-03-12
 
 
 v.0.4.1 -- 2015-03-10
-- Major bug fixed in SetMap  
+- Major bug fix in SetMap  
 
 
 v.0.4 -- 2015-03-09
@@ -39,10 +43,8 @@ v.0.3  --  2015-02-04
 
 
 v.0.2  --  2015-01-23
-No more LongMap, but...:
-- OneMap: A map for associating a long with a long
 - To: Convert common data types to longs and back  
 
 
 v.0.1  --  2015-01-01
-- LongMap: A map (key-value store/column) for associating a long with a long
+- A map (key-value store/column) for associating a long with a long

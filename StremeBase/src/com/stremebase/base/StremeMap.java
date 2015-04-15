@@ -31,7 +31,7 @@ import com.stremebase.file.FileManager.ValueSlot;
  * FixedMap map is the abstract base class for all maps having fixed size arrays as values. 
  *
  */
-public abstract class FixedMap
+public abstract class StremeMap
 {
   protected final String mapName;
   protected final int nodeSize;
@@ -47,11 +47,13 @@ public abstract class FixedMap
 
   protected final MapGetter mapGetter;
 
+  private boolean indexQueryIsSorted = true;
+
 
   /*
    * Used only internally.
    */
-  public FixedMap(String mapName, int nodeSize, boolean persist)
+  public StremeMap(String mapName, int nodeSize, boolean persist)
   {						
     this.mapName = mapName+nodeSize;
     this.nodeSize = nodeSize;
@@ -65,6 +67,7 @@ public abstract class FixedMap
   {
     if (indexer!=null) return;
     indexer = new Indexer(indexType, this);
+    if (!isEmpty() && (indexer.isEmpty())) reIndex();
   }
 
   public void dropIndex()
@@ -88,7 +91,14 @@ public abstract class FixedMap
    */		
   public boolean isEmpty()
   {
-    return getSize()==0;
+    long fileId = -1;
+    while (true)
+    {
+      KeyFile file = DB.fileManager.getNextKeyFile(mapGetter, fileId);
+      if (file==null) return true;
+      if (file.size()>0) return false;
+      fileId = file.id;
+    }
   }	
 
 
@@ -256,6 +266,16 @@ public abstract class FixedMap
     largestKey = DB.NULL;
   }
 
+  public void setIndexQueryIsSorted(boolean sort)
+  {
+    indexQueryIsSorted = sort;
+  }
+
+  public boolean isIndexQuerySorted()
+  {
+    return indexQueryIsSorted; 
+  }
+
   /**
    * Returns all keys that are associated with a value that matches the given bounds.
    * @param lowestValue lowest acceptable value, inclusive. Use {@link Long#MIN_VALUE} to avoid lower bound.
@@ -265,12 +285,14 @@ public abstract class FixedMap
   public LongStream query(long lowestValue, long highestValue)
   {			
     if (!isIndexed()) return scanningQuery(lowestValue, highestValue);
-    return indexer.getKeysWithValueFromRange(lowestValue, highestValue);
+    if (indexQueryIsSorted) return indexer.getKeysWithValueFromRange(lowestValue, highestValue).sorted();
+    return indexer.getKeysWithValueFromRange(lowestValue, highestValue); 
   }
 
   public LongStream unionQuery(long...values)
   {     
     if (!isIndexed()) return scanningUnionQuery(values);
+    if (indexQueryIsSorted) return indexer.getKeysWithValueFromSet(values).sorted();
     return indexer.getKeysWithValueFromSet(values);
   }
 
@@ -314,6 +336,7 @@ public abstract class FixedMap
     return null;
   }
 
+  abstract public void reIndex();
   abstract public void remove(long key);
   abstract public LongStream values(long key);
   abstract protected void put(long key, int index, long value);
@@ -360,7 +383,7 @@ public abstract class FixedMap
       {				
         if (key == toKey || remaining == 0)
         {
-          file = DB.fileManager.getNextKeyFile(FixedMap.this.mapGetter, fileId);
+          file = DB.fileManager.getNextKeyFile(StremeMap.this.mapGetter, fileId);
           if (file == null) return false;
           fileId = file.id;		
           if (file.fromKey+DB.db.KEYSTOAKEYFILE<key) continue;		

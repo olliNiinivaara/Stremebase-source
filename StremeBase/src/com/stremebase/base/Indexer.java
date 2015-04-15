@@ -19,27 +19,24 @@ import java.util.stream.LongStream.Builder;
 import com.stremebase.map.OneMap;
 import com.stremebase.map.SetMap;
 
-//import com.stremebase.containers.LongSetMap;
-
 
 public class Indexer
 {
   public final byte type;
 
-  private final FixedMap map;
-  private final FixedMap posIndex;
+  private final StremeMap map;
+  private final StremeMap posIndex;
   private boolean neg = false;
-  private FixedMap negIndex;
+  private StremeMap negIndex;
 
-  public Indexer(byte type, FixedMap map)
+  public Indexer(byte type, StremeMap map)
   {
     this.type = type;
     this.map = map;
     this.posIndex = createPosIndex(null);
-
   }
 
-  public Indexer(byte type, FixedMap map, int cell)
+  public Indexer(byte type, StremeMap map, int cell)
   {
     if (type != DB.ONE_TO_ONE && type != DB.MANY_TO_ONE) throw new IllegalArgumentException("Single cell can only be indexed with DB.ONE_TO_ONE or DB.MANY_TO_ONE");
     this.type = type;
@@ -47,9 +44,9 @@ public class Indexer
     this.posIndex = createPosIndex("_cell"+cell);
   }
 
-  protected FixedMap createPosIndex(String cell)
+  protected StremeMap createPosIndex(String cell)
   {
-    FixedMap posi;
+    StremeMap posi;
     if (cell == null) cell = "";
     if ((type == DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) posi = new OneMap(map.getMapName()+"_posIndex"+cell, map.persisted);
     else  if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) posi = new SetMap(map.getMapName()+"_posIndex", SetMap.SET, map.persisted);
@@ -62,6 +59,13 @@ public class Indexer
   {
     posIndex.commit();
     if (neg) negIndex.commit();
+  }
+
+  public boolean isEmpty()
+  {
+    if (!posIndex.isEmpty()) return false;
+    if (!neg) return true;
+    return (negIndex.isEmpty());
   }
 
   public LongStream getKeysWithValueFromRange(final long lowestValue, final long highestValue)

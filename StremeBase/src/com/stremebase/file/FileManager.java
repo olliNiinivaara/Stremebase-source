@@ -101,8 +101,11 @@ public class FileManager
     TreeMap<Long, KeyFile> files =  property.getKeyFiles();
     for (KeyFile file: files.values()) file.commit();
 
-    Map<Long, ValueFile> vFiles = property.getValueFiles();
-    for (DbFile file: vFiles.values()) file.commit();
+    if (property.map() instanceof DynamicMap)
+    {
+      Map<Long, ValueFile> vFiles = property.getValueFiles();
+      for (DbFile file: vFiles.values()) file.commit();
+    }
   }
 
   public void clear(MapGetter property)

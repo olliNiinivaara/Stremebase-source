@@ -4,14 +4,17 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.LongStream;
+
 import com.stremebase.base.DB;
-import com.stremebase.base.FixedMap;
+import com.stremebase.base.StremeMap;
 import com.stremebase.base.Indexer;
 import com.stremebase.file.KeyFile;
 
-public class ArrayMap extends FixedMap
+public class ArrayMap extends StremeMap
 {
   protected final Map<Integer, Indexer> indices = new HashMap<>();
+
+
   /**
    * Creates a new ArrayMap for associating an array of values with one key.
    * The returned map is not indexed.
@@ -37,11 +40,17 @@ public class ArrayMap extends FixedMap
 
   public void addIndex(byte indexType)
   {
-    if (indexer!=null) return;
     if (indexType == DB.ONE_TO_ONE || indexType == DB.MANY_TO_ONE)
       throw new IllegalArgumentException("This indextype can be used only for single cells (method addIndextoCell)");
+    super.addIndex(indexType);
+  }
 
-    indexer = new Indexer(indexType, this);
+  @Override
+  public void reIndex()
+  {
+    indexer.clear();
+    keys().forEach(key -> (index(key, null, get(key))));
+    indexer.commit();
   }
 
   public void commit()
@@ -68,7 +77,17 @@ public class ArrayMap extends FixedMap
     if (indexType != DB.ONE_TO_ONE && indexType != DB.MANY_TO_ONE)
       throw new IllegalArgumentException("For single cells, indextype must be either DB.ONE_TO_ONE or DB.MANY_TO_ONE");
 
-    indices.put(cell, new Indexer(indexType, this, cell));
+    Indexer cIndexer = new Indexer(indexType, this, cell);
+    indices.put(cell, cIndexer);
+    if (!isEmpty() && (cIndexer.isEmpty())) reIndexCell(cell);
+  }
+
+  public void reIndexCell(int cell)
+  {
+    Indexer cIndexer = indices.get(cell);
+    cIndexer.clear();
+    keys().forEach(key -> (cIndexer.index(key, get(key, cell))));
+    cIndexer.commit();
   }
 
   public void dropIndexFromCell(int cell)
@@ -77,6 +96,12 @@ public class ArrayMap extends FixedMap
     if (i == null) return;
     i.clear();    
     indices.put(cell, null);
+  }
+
+  protected void index(long key, long[] oldValues, long[] newValues)
+  {
+    if (oldValues!=null) for (long v: oldValues) indexer.remove(key, v);
+    if (newValues!=null) for (long v: newValues) indexer.index(key, v);
   }
 
   /**
@@ -90,7 +115,7 @@ public class ArrayMap extends FixedMap
     KeyFile buf = getData(key, false);
     if (buf == null) return;
 
-    if (isIndexed()) values(key).forEach(value -> indexer.remove(key, value));
+    if (isIndexed()) index(key, get(key), null); 
     for (int cell: indices.keySet()) indices.get(cell).remove(key, get(key, cell));
 
     int base = buf.base(key);
@@ -162,14 +187,9 @@ public class ArrayMap extends FixedMap
     if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
     KeyFile buf = getData(key, true);
     int base = buf.base(key);
-    buf.setActive(base, true);
-    /*boolean olds = !buf.setActive(base, true);
-    if (isIndexed())
-    {
-      long oldValue = DB.NULL;
-      if (olds) oldValue = buf.read(base + 1);
-      indexer.index(key, oldValue, value);
-    }*/
+    long[] oldValues = null;
+    if (!buf.setActive(base, true)) if (isIndexed()) oldValues = get(key);
+    if (isIndexed()) index(key, oldValues, values);
     buf.write(base+1, values);
   }
 
@@ -222,36 +242,64 @@ public class ArrayMap extends FixedMap
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
-    //TODO: read arrays
-    LongStream.Builder b =  LongStream.builder();
-
-    keys().filter(key ->
+    return keys().filter(key ->
     {
+      //TODO: read arrays?
       return values(key).anyMatch(value -> (value!= DB.NULL && value >= lowestValue && value<=highestValue));
-    }).forEach(key -> b.add(key));
-
-    return b.build();
+    });
   }
 
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
-    //TODO: read arrays
-
     Arrays.sort(values);
-    LongStream.Builder b =  LongStream.builder();
 
-    keys().filter(key ->
+    return keys().filter(key ->
     {
       return values(key).anyMatch(value -> (Arrays.binarySearch(values, value)>=0 ? true : false));
-    }).forEach(key -> b.add(key));
-
-    return b.build();
+    });
   }
 
   @Override
   protected int indexOf(long key, int fromIndex, long value)
   {
+    //TODO
     throw new UnsupportedOperationException("TBD");
+  }
+
+  public LongStream queryByCell(int index, long lowestValue, long highestValue)
+  {
+    if (!indices.containsKey(index)) return scanningQueryByCell(index, lowestValue, highestValue);
+    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue).sorted();  
+    return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue);
+  }
+
+  protected LongStream scanningQueryByCell(int index, long lowestValue, long highestValue)
+  {
+    return keys().filter(key ->
+    {
+      long value = get(key, index);
+      return value!= DB.NULL && value >= lowestValue && value<=highestValue;
+    });
+  }
+
+  public LongStream unionQueryByCell(int index, long...values)
+  {
+    if (!indices.containsKey(index)) return scanningUnionQueryByCell(index, values);
+    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromSet(values).sorted();  
+    return indices.get(index).getKeysWithValueFromSet(values);
+  }
+
+
+  protected LongStream scanningUnionQueryByCell(int index, long... values)
+  {
+    Arrays.sort(values);
+
+    return keys().filter(key ->
+    {
+      long value = get(key, index);
+      if (value==DB.NULL) return false;
+      return Arrays.binarySearch(values, value)>=0 ? true : false;
+    });
   }
 }

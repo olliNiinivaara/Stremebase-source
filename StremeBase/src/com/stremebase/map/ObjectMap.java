@@ -109,4 +109,10 @@ public class ObjectMap extends DynamicMap
   {
     throw new UnsupportedOperationException("Objects have no LongStream of values");
   }
+
+  @Override
+  public void reIndex()
+  {
+    throw new IllegalArgumentException("ObjectMap does not support indexing.");    
+  }
 }

@@ -252,9 +252,8 @@ public class DB
     if (persisted) FileManager.deleteDir(new File(DIRECTORY));
   }
 
-  public boolean exists()
+  public boolean existsOnDisk()
   {
-    if (!persisted) return false;
     return new File(DIRECTORY).exists();
   }
 }

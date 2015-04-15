@@ -92,6 +92,15 @@ public class SetMap extends DynamicMap
     super.addIndex(indexType);
   }
 
+  @Override
+  public void reIndex()
+  {
+    indexer.clear();
+    commit();
+    keys().forEach(key -> (values(key).forEach(value -> (indexer.index(key, value)))));
+    indexer.commit();
+  }
+
   protected long getLength(long key)
   {
     flush(key, setCache.get(key));
@@ -431,31 +440,23 @@ public class SetMap extends DynamicMap
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
-    LongStream.Builder b =  LongStream.builder();
-
-    keys().filter(key ->
+    return keys().filter(key ->
     {
       return values(key).anyMatch(value -> (value!= DB.NULL && value >= lowestValue && value<=highestValue));
-    }).forEach(key -> b.add(key));
-
-    return b.build();
+    });
   }
 
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
-    LongStream.Builder b =  LongStream.builder();
-
-    keys().filter(key ->
+    return keys().filter(key ->
     {
       for (long value: values)
       {
         if (fileAttribute(key, value, DB.NULL, false)!=DB.NULL) return true;
       }
       return false;
-    }).forEach(key -> b.add(key));
-
-    return b.build();
+    });
   }
 
   public Stream<SetEntry> attributeQuery(long lowestAttribute, long highestAttribute)
