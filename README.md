@@ -6,6 +6,10 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
+v.0.6.2 -- 2015-04-16
+- Code cleanup  
+
+
 v.0.6.1 -- 2015-04-15
 - Reindexing (on-the-fly add + drop index)  
 

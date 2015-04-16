@@ -22,8 +22,13 @@ import com.stremebase.base.DB;
 import com.stremebase.map.ListMap;
 
 
+/**
+ * Converts strings to longs and back.
+ * Used internally as a singleton instance.
+ * Application access via {@link com.stremebase.base.To}
+ */
 public class Lexicon
-{	
+{
   protected static final int width = 30*2+2;
 
   protected static ListMap strings;
@@ -55,7 +60,7 @@ public class Lexicon
   }
 
   synchronized public static long useWord(CharSequence word, boolean put)
-  {		
+  {
     if (word.length()==0)
     {
       if (!put) return DB.NULL;
@@ -67,14 +72,14 @@ public class Lexicon
     int key = word.charAt(0);
 
     outerloop: for (int c = 1; c<word.length(); c++)
-    {	
+    {
       int i = 0;
       while (true)
-      {  			  			  			
+      {
         long existing = strings.get(key, i+2);
 
-        if (existing==DB.NULL)	
-        { 				
+        if (existing==DB.NULL)
+        {
           if (!put) return DB.NULL;
           strings.put(key, i+2, word.charAt(c));
           final int nextPosition = addChar(word.charAt(c), key, c==word.length()-1);
@@ -82,14 +87,11 @@ public class Lexicon
           key = nextPosition;
           continue outerloop;
         }
-        else
-        {  				
-          if (existing==word.charAt(c))
-          {
-            key = (int)strings.get(key, i+3);
-            if (put && c==word.length()-1) strings.put(key, 0, (int)existing);
-            continue outerloop;
-          }
+        else if (existing==word.charAt(c))
+        {
+          key = (int)strings.get(key, i+3);
+          if (put && c==word.length()-1) strings.put(key, 0, (int)existing);
+          continue outerloop;
         }
         i+=2;
       }
@@ -104,7 +106,7 @@ public class Lexicon
     if (key<=Character.MAX_VALUE) key = Character.MAX_VALUE+1;
     if (!completeWord) chr = -chr;
     strings.put(key, 0, chr);
-    strings.put(key, 1, previouscharKey);		
+    strings.put(key, 1, previouscharKey);
     return (int)key;
   }
 
@@ -129,10 +131,10 @@ public class Lexicon
     if (key > Character.MAX_VALUE && strings.get(key, 0)<0) return;
 
     while (key > Character.MAX_VALUE)
-    {     
-      string.append((char)(Math.abs(strings.get(key, 0))));      
+    {
+      string.append((char)(Math.abs(strings.get(key, 0))));
       key = strings.get(key, 1);
-    }   
+    }
     string.append((char)key);
     string.reverse();
   }
@@ -145,7 +147,7 @@ public class Lexicon
   }
 
   private class WordSpliterator implements Spliterator.OfLong
-  {     
+  {
     protected final Stack<Long> stack = new Stack<>();
 
     protected WordSpliterator(long key)
@@ -195,5 +197,5 @@ public class Lexicon
         }
       }
     }
-  } 
+  }
 }

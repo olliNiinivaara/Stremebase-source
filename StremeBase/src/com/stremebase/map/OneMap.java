@@ -20,13 +20,16 @@ import com.stremebase.base.StremeMap;
 import com.stremebase.file.KeyFile;
 
 
+/**
+ * A map for associating a value with a key
+ * The value must be converted to long, for example with {@link com.stremebase.base.To}
+ */
 public class OneMap extends StremeMap
 {
   /**
-   * Creates a new OneMap for associating one value with one key.
-   * The returned map is not indexed.
+   * Creates a new OneMap for associating one value for each key.
    * The returned map is persistent iff the database is.
-   * 
+   *
    * @param mapName
    *          name for the map. Must be a database-wide unique value.
    */
@@ -35,11 +38,20 @@ public class OneMap extends StremeMap
     super(mapName, 2, DB.isPersisted());
   }
 
+  /**
+   * Creates a new OneMap for associating one value with one key.
+   * The returned map is persistent iff the database is.
+   *
+   * @param mapName
+   *          name for the map. Must be a database-wide unique value.
+   * @param persist if persisted         
+   */
   public OneMap(String mapName, boolean persist)
   {
     super(mapName, 2, persist);
   }
 
+  @Override
   public void addIndex(byte indexType)
   {
     if ((indexType != DB.ONE_TO_ONE) && (indexType != DB.MANY_TO_ONE))
@@ -55,12 +67,7 @@ public class OneMap extends StremeMap
     indexer.commit();
   }
 
-  /**
-   * Removes the given key from the map
-   * 
-   * @param key
-   *          the key to be removed
-   */
+  @Override
   public void remove(long key)
   {
     KeyFile buf = getData(key, false);
@@ -73,14 +80,6 @@ public class OneMap extends StremeMap
     if (isIndexed()) indexer.remove(key, buf.read(base + 1));
   }
 
-  /**
-   * Returns the value associated with the key
-   * 
-   * @param key
-   *          the key
-   * @return the value, or {@link com.stremebase.base.DB#NULL} if key was
-   *         nonexistent
-   */
   public long get(long key)
   {
     KeyFile buf = getData(key, false);
@@ -105,7 +104,7 @@ public class OneMap extends StremeMap
 
   /**
    * Associates a value with a key
-   * 
+   *
    * @param key
    *          the key
    * @param value
@@ -125,13 +124,6 @@ public class OneMap extends StremeMap
     buf.write(base + 1, value);
   }
 
-  /**
-   * Returns the value associated with a key as a {@link LongStream}
-   * 
-   * @param key
-   *          the key
-   * @return the value or an empty stream if there's no value
-   */
   @Override
   public LongStream values(long key)
   {
@@ -142,12 +134,6 @@ public class OneMap extends StremeMap
     b.add(buf.read(base + 1));
     return b.build();
   }
-
-  /*@Override
-  protected Object getObject(long key)
-  {
-    return get(key);
-  }*/
 
   @Override
   protected LongStream scanningQuery(long lowestValue, long highestValue)
@@ -162,7 +148,7 @@ public class OneMap extends StremeMap
   @Override
   protected LongStream scanningUnionQuery(long... values)
   {
-    Arrays.sort(values);    
+    Arrays.sort(values);
 
     return keys().filter(key ->
     {
@@ -172,12 +158,6 @@ public class OneMap extends StremeMap
 
   @Override
   protected void put(long key, int index, long value)
-  {
-    throw new UnsupportedOperationException("OneMap index?");
-  }
-
-  @Override
-  protected int indexOf(long key, int fromIndex, long value)
   {
     throw new UnsupportedOperationException("OneMap index?");
   }

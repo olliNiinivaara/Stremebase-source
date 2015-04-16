@@ -18,7 +18,9 @@ import java.util.ArrayList;
 import com.stremebase.base.DB;
 import com.stremebase.map.SetMap;
 
-
+/**
+ * Used internally by SetMap
+ */
 public class SetCache
 {
   protected final SetMap setMap;
@@ -44,12 +46,8 @@ public class SetCache
   {
     long[] hashedKeys = keyMap[(int) key % keyMap.length];
 
-    // System.out.println(key +" : "+Arrays.toString(hashedKeys));
-
     for (int i = 1; i<hashedKeys[0]; i+=2)
-    {
       if (hashedKeys[i]==key) return memory[(int) (hashedKeys[i+1])];
-    }
     return null;
   }
 
@@ -57,14 +55,12 @@ public class SetCache
   {
     long[] hashedKeys = keyMap[(int) key % keyMap.length];
     for (int i = 1; i<hashedKeys[0]; i+=2)
-    {
       if (hashedKeys[i]==key)
       {
         memory[(int) (hashedKeys[i+1])] = value;
         return;
       }
-    }
-    if (nextAddress == memory.length) commitAll(); 
+    if (nextAddress == memory.length) commitAll();
     else if (hashedKeys[0]==20) commit(key);
     hashedKeys[(int) hashedKeys[0]+1] = key;
     hashedKeys[(int) hashedKeys[0]+2] = nextAddress;
@@ -94,13 +90,11 @@ public class SetCache
   {
     long[] hashedKeys = keyMap[(int) key % keyMap.length];
     for (int i = 1; i<hashedKeys[0]; i+=2)
-    {
       if (hashedKeys[i]==key)
       {
         memory[(int) (hashedKeys[i]+1)] = null;
         hashedKeys[i] = -1;
         return;
       }
-    }
   }
 }

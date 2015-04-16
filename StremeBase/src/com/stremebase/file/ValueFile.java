@@ -11,28 +11,31 @@
 
 package com.stremebase.file;
 
-
+/**
+ * A buffer for storing value slots
+ * For internal use only.
+ */
 public class ValueFile extends DbFile
 {
-	protected static final int pEof = 0;
-	
-	protected ValueFile(long id, String fileName, long requiredSize, boolean persisted)
-	{
-		super(id, fileName, requiredSize, persisted);
-	}
-	
-	protected long getRemainingCapacity()
-	{
-		long eof = read(pEof);
-		if (eof==0) write(pEof, 1);
-		return getCapacity() - eof;
-	}
-		
-	protected long getAndSetEof(long amount)
-	{
-		long eof = read(pEof);
-		if (eof==0) eof = 1;
-		write(pEof, eof+amount);
-		return eof;
-	}
+  protected static final int pEof = 0;
+
+  protected ValueFile(long id, String fileName, long requiredSize, boolean persisted)
+  {
+    super(id, fileName, requiredSize, persisted);
+  }
+
+  protected long getRemainingCapacity()
+  {
+    long eof = read(pEof);
+    if (eof==0) write(pEof, 1);
+    return getCapacity() - eof;
+  }
+
+  protected long getAndSetEof(long amount)
+  {
+    long eof = read(pEof);
+    if (eof==0) eof = 1;
+    write(pEof, eof+amount);
+    return eof;
+  }
 }

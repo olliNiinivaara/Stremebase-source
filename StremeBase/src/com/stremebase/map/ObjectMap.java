@@ -22,32 +22,67 @@ import com.stremebase.base.DB;
 import com.stremebase.base.DynamicMap;
 
 
+/**
+ * A map to store key-object pairs (the classic key-value store)
+ * The object's class must implement {@link java.io.Serializable}
+ * ObjectMap does not support queries by value
+ */
 public class ObjectMap extends DynamicMap
-{		
+{  
+  /**
+   * Creates a new ObjectMap, which is persisted iff DB is
+   * @param mapName the name
+   */
   public ObjectMap(String mapName)
   {
-    super (mapName, 10000, DB.isPersisted());
+    super (mapName, 0, DB.isPersisted());
   }
 
+  /**
+   * Creates a new ObjectMap
+   * @param mapName the name
+   * @param persisted if persisted
+   */
+  public ObjectMap(String mapName, boolean persisted)
+  {
+    super (mapName, 0, persisted);
+  }
+
+  @Deprecated
   public void addIndex(int indexType)
   {
     throw new IllegalArgumentException("ObjectMap does not support indexing.");
   }
 
+  /**
+   * Scans through values to find whether a matching serialization exists
+   * @param value the object to be searched for
+   * @return true if exists
+   */
   public boolean containsValue(Object value)
   {
     long[] o = serialize(value);
     return keys().filter(key -> listEquals(key, o)).findAny().isPresent();
   }
 
+  /**
+   * Returns the object
+   * @param key the key
+   * @return the object
+   */
   public Object get(long key)
   {
     if (!containsKey(key)) return null;
-    long[] o = new long[getSize(key)];
+    long[] o = new long[(int)getSize(key)];
     get(key, o);
     return deSerialize(o);
   }
 
+  /**
+   * Stores an object
+   * @param key the key
+   * @param value the value
+   */
   public void put(long key, Object value)
   {
     final long[] array =  serialize(value);
@@ -93,26 +128,30 @@ public class ObjectMap extends DynamicMap
   }
 
   @Override
+  @Deprecated
   protected LongStream scanningQuery(long lowestValue, long highestValue)
   {
     throw new UnsupportedOperationException("Objects cannot be queried");
   }
 
   @Override
+  @Deprecated
   protected LongStream scanningUnionQuery(long... values)
   {
     throw new UnsupportedOperationException("Objects cannot be queried");
   }
 
   @Override
+  @Deprecated
   public LongStream values(long key)
   {
     throw new UnsupportedOperationException("Objects have no LongStream of values");
   }
 
   @Override
+  @Deprecated
   public void reIndex()
   {
-    throw new IllegalArgumentException("ObjectMap does not support indexing.");    
+    throw new IllegalArgumentException("ObjectMap does not support indexing.");
   }
 }

@@ -24,12 +24,17 @@ import com.stremebase.base.DB;
 /**
  * This class contains static method(s) for manipulating streams.
  */
-public final class Streams 
-{		
+public final class Streams
+{
   protected static final Streams s = new Streams();
 
   private Streams() {}
 
+  /**
+   * Returns union of the input streams. Fast, but input streams MUST be ordered.
+   * @param streams the streams to be unioned
+   * @return union of streams as a stream
+   */
   public static LongStream union(LongStream... streams)
   {
     int existing = 0;
@@ -50,7 +55,7 @@ public final class Streams
    */
   public static LongStream intersection(LongStream... streams)
   {
-    if (streams == null) return LongStream.empty();		
+    if (streams == null) return LongStream.empty();
     for (LongStream stream: streams) if (stream == null) return LongStream.empty();
     if (streams.length==1) return streams[0];
     return StreamSupport.longStream(s.new StreamIntersector(streams), false);
@@ -66,7 +71,7 @@ public final class Streams
     {
       candidate = DB.NULL;
 
-      this.streams = new PrimitiveIterator.OfLong[inputStreams.length]; 
+      this.streams = new PrimitiveIterator.OfLong[inputStreams.length];
       for (int i=0; i<inputStreams.length; i++) this.streams[i] = inputStreams[i].iterator();
 
       keys = new long[inputStreams.length];
@@ -100,7 +105,7 @@ public final class Streams
         {
           if (keys[i] == candidate) continue;
           if (keys[i]<candidate || candidate==DB.NULL)
-          {	
+          {
             if (!streams[i].hasNext()) return false;
             keys[i] = streams[i].nextLong();
             if (keys[i]>candidate) candidate = keys[i];
@@ -130,15 +135,13 @@ public final class Streams
       waitingKeys = new long[inputStreams.length];
 
       for (int i = 0; i<streams.length; i++)
-      {
-        if (!streams[i].hasNext()) waitingKeys[i] = DB.NULL;    
+        if (!streams[i].hasNext()) waitingKeys[i] = DB.NULL;
         else
         {
           waitingKeys[i] = streams[i].nextLong();
           if (currentStream==-1) currentStream = i;
           else if (waitingKeys[i]<waitingKeys[currentStream]) currentStream = i;
         }
-      }
     }
 
     @Override

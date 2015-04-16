@@ -23,6 +23,13 @@ import com.stremebase.file.KeyFile;
 import com.stremebase.file.ValueFile;
 
 
+/**
+ * SetMap associates a key with a set or a bag of values.
+ * Set the set type in constructor:
+ * SetMap.SET: An ordinary set
+ * SetMap.MULTISET: A bag - occurrences are counted
+ * SetMap.ATTRIBUTEDSET: Values can be further associated with an arbitrary tag (for example type or weight of value) 
+ */
 public class SetMap extends DynamicMap
 {
   public static final byte SET = 0;
@@ -36,6 +43,13 @@ public class SetMap extends DynamicMap
   private static final long NOTWRITTEN = DB.NULL;
   private static final long WRITTEN = 0;
 
+  /**
+   * SetEntry contains not only key and value, but also an attribute
+   * for MULTISETs, the attribute is the count of values
+   * for ATTRIBUTEDSETs, you can assign any value but DB.NULL
+   * <p>
+   * SetEntries are compared by attributes
+   */
   public class SetEntry implements Comparable<SetEntry>
   {
     public final long key;
@@ -64,16 +78,30 @@ public class SetMap extends DynamicMap
     }
   }
 
+  /**
+   * Creates a new SetMap with type SET for associating many values with each key.
+   * The returned map is persistent iff the database is.
+   *
+   * @param mapName
+   *          name for the map. Must be a database-wide unique value.
+   */
   public SetMap(String mapName)
   {
-    super(mapName, 1000, DB.isPersisted());
+    super(mapName, DB.db.INITIALCAPACITY, DB.isPersisted());
     this.type = SET;
     setCache = new SetCache(this);
   }
 
-  public SetMap(String mapName, byte type, boolean persist)
+  /**
+   * Creates a new SetMap of given type
+   * @param mapName the name
+   * @param initialCapacity Initial capacity of each set
+   * @param type the type (SET, MULTISET or ATTRIBUTEDSET)
+   * @param persist if you persist
+   */
+  public SetMap(String mapName, int initialCapacity, byte type, boolean persist)
   {
-    super(mapName, 0, persist);
+    super(mapName, initialCapacity, persist);
     this.type = type;
     setCache = new SetCache(this);
   }
@@ -85,6 +113,7 @@ public class SetMap extends DynamicMap
     super.commit();
   }
 
+  @Override
   public void addIndex(byte indexType)
   {
     if (indexType == DB.MANY_TO_MULTIMANY)
@@ -101,18 +130,35 @@ public class SetMap extends DynamicMap
     indexer.commit();
   }
 
-  protected long getLength(long key)
+  /**
+   * Returns the size of the set, including DB.NULL values
+   */
+  public long getSize(long key)
   {
     flush(key, setCache.get(key));
-    return super.getSize(key)/2; 
+    return super.getSize(key)/2;
   }
 
+  /**
+   * Tells if the set for a key contains a given value
+   * @param key the key
+   * @param value the key
+   * @return result
+   */
   public boolean containsValue(long key, long value)
   {
     long attribute = getAttribute(key, value);
     return (attribute!=DB.NULL &&(type!=MULTISET || attribute!=0));
   }
 
+  /**
+   * Returns the attribute associated with a key
+   * For multisets, the count of values
+   * For attributedsets, something you have put there
+   * @param key the key
+   * @param value the value
+   * @return the attribute or DB.NULL
+   */
   public long getAttribute(long key, long value)
   {
     long[] set = setCache.get(key);
@@ -137,6 +183,11 @@ public class SetMap extends DynamicMap
     return fileAttribute;
   }
 
+  /**
+   * The SetEntries associated with a key
+   * @param key the key
+   * @return stream of entries
+   */
   public Stream<SetEntry> entries(long key)
   {
     long[] set = setCache.get(key);
@@ -158,12 +209,15 @@ public class SetMap extends DynamicMap
       {
         entry[1] = value;
         index[0] = 0;
-        //return true;
         return value != DB.NULL ? true : false;
       }
     }).mapToObj(value -> {return new SetEntry(key, entry[0], entry[1]);});
   }
 
+  /**
+   * The values associated with a key
+   */
+  @Override
   public LongStream values(long key)
   {
     long[] set = setCache.get(key);
@@ -171,7 +225,7 @@ public class SetMap extends DynamicMap
 
     final boolean[] isValue = new boolean[1];
     isValue[0] = true;
-    final long[] theValue = new long[1]; 
+    final long[] theValue = new long[1];
 
     return super.values(key, false, false).filter(value ->
     {
@@ -190,7 +244,7 @@ public class SetMap extends DynamicMap
   }
 
   protected void put(long key, long value, long attribute)
-  { 
+  {
     if (key<0) throw new IllegalArgumentException("Negative keys are not supported ("+key+")");
     if (value==DB.NULL) throw new IllegalArgumentException("Value cannot be DB.NULL");
 
@@ -238,41 +292,61 @@ public class SetMap extends DynamicMap
   }
 
   protected int findPosition(long[] array, int last, long element)
-  {   
+  {
     int start = 2;
     int end = last+1;
     int test = -1;
     long value;
 
     while (start<end)
-    {     
+    {
       test = (end + start) / 2;
       if (test % 2 !=0) test-=1;
       value = array[test];
 
-      if (value == element) return test;      
+      if (value == element) return test;
       if (value < element) start = test+2;
       else end = test;
     }
     return start;
   }
 
+  /**
+   * Puts a new value to a key's set
+   * @param key the key
+   * @param value the value
+   */
   public void put(long key, long value)
-  { 
+  {
     put(key, value, 1);
   }
 
+  /**
+   * A helper method to put multiple entries at once to an ATTRIBUTEDSET
+   * @param entries an array of arrays of 3 longs: key, value, and attribute
+   */
   public void put(long[]... entries)
   {
     if (type != ATTRIBUTEDSET) throw new UnsupportedOperationException("Only ATTRIBUTEDSETs have attributes");
     for (long[] entry: entries) put(entry[0], entry[1], entry[2]);
   }
 
+  /**
+   * Removes a value from set. For MULTISET, this means decreasing count by one.
+   * @param key the key
+   * @param value thr value
+   */
   public void remove(long key, long value)
   {
     if (type == MULTISET) put(key, value, -1); else put(key, value, DB.NULL);
   }
 
+  /**
+   * Sets an attribute for a value. Works only with ATTRIBUTEDSET. 
+   * @param key the key
+   * @param value the value
+   * @param attribute the attribute
+   */
   public void setAttribute(long key, long value, long attribute)
   {
     if (type != ATTRIBUTEDSET) throw new UnsupportedOperationException("Only ATTRIBUTEDSETs have attributes");
@@ -286,17 +360,21 @@ public class SetMap extends DynamicMap
     super.remove(key);
   }
 
+  /**
+   * Writes cache to buffer.
+   * Used only internally.
+   * @param key the key
+   * @param value the cached part
+   */
   public void flush(long key, long[] value)
-  {   
+  {
     if (value == null) return;
     if (value[0]==0) return;
     writeCached(key, value);
   }
 
   protected void writeCached(long key, long[] cached)
-  {               
-    //TODO index
-
+  {
     KeyFile header = getData(key, false);
 
     if (header!=null)
@@ -334,7 +412,7 @@ public class SetMap extends DynamicMap
             newSlot.valueFile.write(newPos+1, oldAttribute);
             newPos+=2;
             newLength++;
-          }       
+          }
         }
         else
         {
@@ -391,7 +469,7 @@ public class SetMap extends DynamicMap
     int base = header.base(key);
     int end = (int)header.read(base+DynamicMap.pLength)-1;
     if (end==-1) return DB.NULL;
-    int valueBase = (int)header.read(base+DynamicMap.pSlotFilePosition); 
+    int valueBase = (int)header.read(base+DynamicMap.pSlotFilePosition);
 
     ValueFile file = DB.fileManager.getValueFile(mapGetter, header.read(base+DynamicMap.pSlotFileId));
 
@@ -400,7 +478,7 @@ public class SetMap extends DynamicMap
     long currentValue;
 
     while (start<end)
-    {     
+    {
       test = (end + start) / 2;
       if (test % 2 !=0) test-=1;
 
@@ -415,18 +493,12 @@ public class SetMap extends DynamicMap
         if (type!=MULTISET && newAttribute == attribute) return WRITTEN;
 
         if (type!=MULTISET) file.write(valueBase+test+1, newAttribute);
-        else
-        {
-          if (attribute==DB.NULL) file.write(valueBase+test+1, newAttribute); 
-          else if (newAttribute==DB.NULL) file.write(valueBase+test+1, DB.NULL);
-          else file.write(valueBase+test+1, attribute+newAttribute);
-        }
+        else if (attribute==DB.NULL) file.write(valueBase+test+1, newAttribute);
+        else if (newAttribute==DB.NULL) file.write(valueBase+test+1, DB.NULL);
+        else file.write(valueBase+test+1, attribute+newAttribute);
 
-        if (isIndexed())
-        {
-          if (newAttribute == DB.NULL) indexer.remove(key, attribute);
-          else indexer.index(key, newAttribute);
-        }
+        if (isIndexed()) if (newAttribute == DB.NULL) indexer.remove(key, attribute);
+        else indexer.index(key, newAttribute);
 
         return WRITTEN;
       }
@@ -452,19 +524,24 @@ public class SetMap extends DynamicMap
     return keys().filter(key ->
     {
       for (long value: values)
-      {
         if (fileAttribute(key, value, DB.NULL, false)!=DB.NULL) return true;
-      }
       return false;
     });
   }
 
+  /**
+   * Range query by attributes for ATTRIBUTEDSET
+   * Note that the Stream is not sorted!
+   * @param lowestAttribute minimum
+   * @param highestAttribute maximum
+   * @return matching keys
+   */
   public Stream<SetEntry> attributeQuery(long lowestAttribute, long highestAttribute)
   {
     return scanningAttributeQuery(lowestAttribute, highestAttribute);
   }
 
-  public Stream<SetEntry> scanningAttributeQuery(long lowestAttribute, long highestAttribute)
+  protected Stream<SetEntry> scanningAttributeQuery(long lowestAttribute, long highestAttribute)
   {
     Stream.Builder<SetEntry> b =  Stream.builder();
 
@@ -479,12 +556,18 @@ public class SetMap extends DynamicMap
     return b.build();
   }
 
+  /**
+   * Or-query by attributes for ATTRIBUTEDSET
+   * Note that the Stream is not sorted!
+   * @param attributes acceptable attributes
+   * @return matching keys
+   */
   public Stream<SetEntry> attributeUnionQuery(long... attributes)
   {
     return scanningAttributeUnionQuery(attributes);
   }
 
-  public Stream<SetEntry> scanningAttributeUnionQuery(long... attributes)
+  protected Stream<SetEntry> scanningAttributeUnionQuery(long... attributes)
   {
     Arrays.sort(attributes);
 

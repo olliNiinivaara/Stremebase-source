@@ -21,8 +21,12 @@ import java.nio.channels.FileChannel;
 import com.stremebase.base.DB;
 
 
+/**
+ * A direct memory buffer to store the data
+ * For internal use only.
+ */
 public class DbFile
-{	
+{
   public final long id;
   public final boolean persisted;
   public final String fileName;
@@ -85,7 +89,7 @@ public class DbFile
   }
 
   protected void createBuffer()
-  {		
+  {
     if (!persisted)
     {
       byteBuffer = ByteBuffer.allocate((int) (size*8));
@@ -95,14 +99,11 @@ public class DbFile
 
     File file = new File(fileName);
 
-    if (size==DB.NULL)
-    {
-      if (file.exists()) size = (int)file.length()/8;
-      else return;
-    }
+    if (size==DB.NULL) if (file.exists()) size = (int)file.length()/8;
+    else return;
 
     try (RandomAccessFile fileHandle = new RandomAccessFile(file.getAbsolutePath(), "rw"))
-    { 		  	
+    {
       FileChannel fileChannel = fileHandle.getChannel();
       byteBuffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, size*8);
       longBuffer = byteBuffer.asLongBuffer();

@@ -20,6 +20,10 @@ import com.stremebase.map.OneMap;
 import com.stremebase.map.SetMap;
 
 
+/**
+ * Implements indexing.
+ * For internal use only.
+ */
 public class Indexer
 {
   public final byte type;
@@ -49,8 +53,8 @@ public class Indexer
     StremeMap posi;
     if (cell == null) cell = "";
     if ((type == DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY)) posi = new OneMap(map.getMapName()+"_posIndex"+cell, map.persisted);
-    else  if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) posi = new SetMap(map.getMapName()+"_posIndex", SetMap.SET, map.persisted);
-    else  if (type == DB.MANY_TO_MULTIMANY) posi = new SetMap(map.getMapName()+"_posIndex", SetMap.MULTISET, map.persisted);
+    else  if (type == DB.MANY_TO_ONE || type == DB.MANY_TO_MANY) posi = new SetMap(map.getMapName()+"_posIndex", DB.db.INITIALINDEXVALUESIZE, SetMap.SET, map.persisted);
+    else  if (type == DB.MANY_TO_MULTIMANY) posi = new SetMap(map.getMapName()+"_posIndex", DB.db.INITIALINDEXVALUESIZE, SetMap.MULTISET, map.persisted);
     else throw new IllegalArgumentException("Unrecognized index type: "+type);
     return posi;
   }
@@ -124,13 +128,13 @@ public class Indexer
     long positiveLowest = 0;
     long negativeHighest = -1;
 
-    if (highestValue>=0) 
+    if (highestValue>=0)
     {
       if (lowestValue>0) positiveLowest = lowestValue;
       posStream = posIndex.keys(positiveLowest, highestValue).
           <Stream<SetMap.SetEntry>>mapToObj(value ->
           {
-            return ((SetMap)posIndex).entries(value).filter(entry -> 
+            return ((SetMap)posIndex).entries(value).filter(entry ->
             {
               return entry.attribute>=lowestCount && entry.attribute<=highestCount;
             });
@@ -143,7 +147,7 @@ public class Indexer
     negStream = negIndex.keys(-negativeHighest, -lowestValue).
         <Stream<SetMap.SetEntry>>mapToObj(value ->
         {
-          return ((SetMap)posIndex).entries(value).filter(entry -> 
+          return ((SetMap)posIndex).entries(value).filter(entry ->
           {
             return entry.attribute>=lowestCount && entry.attribute<=highestCount;
           });
@@ -212,7 +216,7 @@ public class Indexer
     if (newValue==DB.NULL) throw new IllegalArgumentException("Value cannot be DB.NULL");
 
     if ((type==DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY))
-    {        
+    {
       if (newValue>=0) ((OneMap)posIndex).put(newValue, key);
       else
       {
@@ -224,19 +228,16 @@ public class Indexer
         ((OneMap)negIndex).put(-newValue, key);
       }
     }
+    else if (newValue>=0) ((SetMap)posIndex).put(newValue, key);
     else
     {
-      if (newValue>=0) ((SetMap)posIndex).put(newValue, key);
-      else
+      if (!neg)
       {
-        if (!neg)
-        {
-          byte setType = type == DB.MANY_TO_MULTIMANY ? SetMap.MULTISET : SetMap.SET;
-          negIndex = new SetMap(map.getMapName()+"_negIndex", setType, map.persisted);
-          neg = true;
-        }
-        ((SetMap)negIndex).put(-newValue, key);
+        byte setType = type == DB.MANY_TO_MULTIMANY ? SetMap.MULTISET : SetMap.SET;
+        negIndex = new SetMap(map.getMapName()+"_negIndex", DB.db.INITIALINDEXVALUESIZE, setType, map.persisted);
+        neg = true;
       }
+      ((SetMap)negIndex).put(-newValue, key);
     }
   }
 
@@ -245,15 +246,12 @@ public class Indexer
     if (oldValue==DB.NULL) return;
 
     if ((type==DB.ONE_TO_ONE) || (type == DB.ONE_TO_MANY))
-    {        
+    {
       if (oldValue>=0) posIndex.remove(oldValue);
       else if (neg)negIndex.remove(-oldValue);
     }
-    else
-    {
-      if (oldValue>=0) ((SetMap)posIndex).remove(oldValue, key);
-      else if (neg) ((SetMap)negIndex).remove(-oldValue, key);
-    }
+    else if (oldValue>=0) ((SetMap)posIndex).remove(oldValue, key);
+    else if (neg) ((SetMap)negIndex).remove(-oldValue, key);
   }
 
   public void clear()

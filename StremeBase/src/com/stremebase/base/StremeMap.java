@@ -28,8 +28,7 @@ import com.stremebase.file.FileManager.ValueSlot;
 
 
 /**
- * FixedMap map is the abstract base class for all maps having fixed size arrays as values. 
- *
+ * StremeMap map is the abstract base class for all maps (this is the heart of Stremebase).
  */
 public abstract class StremeMap
 {
@@ -37,7 +36,7 @@ public abstract class StremeMap
   protected final int nodeSize;
   protected final boolean persisted;
 
-  protected Indexer indexer; 
+  protected Indexer indexer;
 
   protected final TreeMap<Long, KeyFile> keyFiles = new TreeMap<>();
   protected final HashMap<Long, ValueFile> valueFiles = new HashMap<>();
@@ -50,11 +49,14 @@ public abstract class StremeMap
   private boolean indexQueryIsSorted = true;
 
 
-  /*
-   * Used only internally.
+  /**
+   * Basic initialization.
+   * @param mapName name
+   * @param nodeSize internal length
+   * @param persist if persisted
    */
   public StremeMap(String mapName, int nodeSize, boolean persist)
-  {						
+  {
     this.mapName = mapName+nodeSize;
     this.nodeSize = nodeSize;
     this.persisted = DB.isPersisted() && persist;
@@ -63,6 +65,10 @@ public abstract class StremeMap
     largestValueFileId = DB.fileManager.loadProperty(mapGetter);
   }
 
+  /**
+   * Adds an index of given type to the map
+   * @param indexType see {@link com.stremebase.base.DB} for valid values
+   */
   public void addIndex(byte indexType)
   {
     if (indexer!=null) return;
@@ -70,6 +76,9 @@ public abstract class StremeMap
     if (!isEmpty() && (indexer.isEmpty())) reIndex();
   }
 
+  /**
+   * Drops the index
+   */
   public void dropIndex()
   {
     if (indexer==null) return;
@@ -78,17 +87,17 @@ public abstract class StremeMap
   }
 
   /**
-   * @return {@link #getSize()} as int 
-   */
+   * @return {@link #getSize()} as int
+   *
   public int size()
   {
     return (int)getSize();
-  }
+  }/*
 
   /**
    * Returns whether there is any keys stored in this map
    * @return true, if the map is empty
-   */		
+   */
   public boolean isEmpty()
   {
     long fileId = -1;
@@ -99,16 +108,11 @@ public abstract class StremeMap
       if (file.size()>0) return false;
       fileId = file.id;
     }
-  }	
-
-
-  /*public boolean containsKey(Object key)
-	{
-		return containsKey((long)key);
-	}*/
+  }
 
   /**
-   * Returns the unique name of the map. Essentially used internally.
+   * Returns the name of the map.
+   * Essentially used internally.
    * @return the name of the map.
    */
   public String getMapName()
@@ -118,7 +122,7 @@ public abstract class StremeMap
 
   /**
    * Returns the largest key currently stored to the map.
-   * You are strongly advised to use this method to generate keys in an auto-incrementing manner, because Stremebase is optimized to handle such keys efficiently. 
+   * Use this method to generate keys in an auto-incrementing manner, because Stremebase is optimized to handle (only) continuous key sequences efficiently.
    * @return the largest key currently in the map, 0 if the map is empty.
    */
   public long getLargestKey()
@@ -126,7 +130,7 @@ public abstract class StremeMap
     if (largestKey==DB.NULL)
     {
       OptionalLong largest = keys(getSize()-1, Long.MAX_VALUE).max();
-      largestKey = largest.isPresent() ? largest.getAsLong() : 0;			
+      largestKey = largest.isPresent() ? largest.getAsLong() : 0;
     }
     return largestKey;
   }
@@ -202,10 +206,7 @@ public abstract class StremeMap
    */
   public void commit()
   {
-    if (persisted)
-    {
-      DB.fileManager.commit(mapGetter);
-    }
+    if (persisted) DB.fileManager.commit(mapGetter);
     if (isIndexed()) indexer.commit();
   }
 
@@ -222,13 +223,14 @@ public abstract class StremeMap
    *  Commits data about free spaces in files to disk. If the map is in-memory, does nothing.
    */
   public void close()
-  {	
+  {
     DB.fileManager.close(mapGetter);
     if (isIndexed()) indexer.close();
   }
 
   /**
    * Tells whether there's data associated with a given key
+   * Note that a non-removed multi-valued attribute exists even when all it's individual values are DB.NULL
    * @param key the key
    * @return true, if value exists
    */
@@ -247,13 +249,8 @@ public abstract class StremeMap
    */
   public boolean containsValue(long value)
   {
-    return query(value, value).findAny().isPresent(); 
+    return query(value, value).findAny().isPresent();
   }
-
-  /*protected boolean containsValue(long key, long value)
-	{
-		return indexOf(key, 0, value) != -1;
-	}*/
 
   /**
    * Deletes all data
@@ -266,31 +263,45 @@ public abstract class StremeMap
     largestKey = DB.NULL;
   }
 
+  /**
+   * If true, keys returned by queries are sorted (important when calculating key intersections).
+   * Setting to false improves performance 
+   * @param sort default value true
+   */
   public void setIndexQueryIsSorted(boolean sort)
   {
     indexQueryIsSorted = sort;
   }
 
+  /**
+   * Tells whether keys returned by queries are sorted
+   * @return true if sorted
+   */
   public boolean isIndexQuerySorted()
   {
-    return indexQueryIsSorted; 
+    return indexQueryIsSorted;
   }
 
   /**
-   * Returns all keys that are associated with a value that matches the given bounds.
+   * Returns all keys that are associated with a value that matches the given bounds (RANGE and BETWEEN-queries).
    * @param lowestValue lowest acceptable value, inclusive. Use {@link Long#MIN_VALUE} to avoid lower bound.
    * @param highestValue highest acceptable value, inclusive. Use {@link Long#MAX_VALUE} to avoid upper bound.
    * @return result of the query as a stream of keys
    */
   public LongStream query(long lowestValue, long highestValue)
-  {			
+  {
     if (!isIndexed()) return scanningQuery(lowestValue, highestValue);
     if (indexQueryIsSorted) return indexer.getKeysWithValueFromRange(lowestValue, highestValue).sorted();
-    return indexer.getKeysWithValueFromRange(lowestValue, highestValue); 
+    return indexer.getKeysWithValueFromRange(lowestValue, highestValue);
   }
 
-  public LongStream unionQuery(long...values)
-  {     
+  /**
+   * Returns all keys that are associated with any given value (OR-query).
+   * @param values the acceptable values
+   * @return result of the query as a stream of keys
+   */
+  public LongStream unionQuery(long... values)
+  {
     if (!isIndexed()) return scanningUnionQuery(values);
     if (indexQueryIsSorted) return indexer.getKeysWithValueFromSet(values).sorted();
     return indexer.getKeysWithValueFromSet(values);
@@ -313,14 +324,14 @@ public abstract class StremeMap
    */
   public Spliterator.OfLong spliterator(long lowestKey, long highestKey, boolean parallel)
   {
-    if (parallel)	return Spliterators.spliterator(new KeySetIterator(lowestKey, highestKey), size(),
+    if (parallel)	return Spliterators.spliterator(new KeySetIterator(lowestKey, highestKey), getSize(),
         java.util.Spliterator.DISTINCT | java.util.Spliterator.IMMUTABLE | java.util.Spliterator.NONNULL | java.util.Spliterator.ORDERED);
     else return Spliterators.spliteratorUnknownSize(new KeySetIterator(lowestKey, highestKey),
         java.util.Spliterator.DISTINCT | java.util.Spliterator.IMMUTABLE | java.util.Spliterator.NONNULL | java.util.Spliterator.ORDERED);
   }
 
   protected KeyFile getData(long key, boolean create)
-  {     
+  {
     KeyFile result = create ? DB.fileManager.getKeyFile(mapGetter, KeyFile.fileId(key), nodeSize) : DB.fileManager.getKeyFile(mapGetter, KeyFile.fileId(key), DB.NULL);
     if (create  && key>largestKey) largestKey = key;
     return result;
@@ -336,11 +347,26 @@ public abstract class StremeMap
     return null;
   }
 
+  /**
+   * Reindexes the map.
+   * Mainly for internal use (used when index is added to a map that contains data).
+   */
   abstract public void reIndex();
+
+  /**
+   * Removes the key from the map
+   * @param key the key to remove
+   */
   abstract public void remove(long key);
+
+  /**
+   * Returns values associated with a key as a {@link LongStream}
+   * @param key the key
+   * @return the values, or an empty stream
+   */
   abstract public LongStream values(long key);
+
   abstract protected void put(long key, int index, long value);
-  abstract protected int indexOf(long key, int fromIndex, long value);
   abstract protected LongStream scanningQuery(long lowestValue, long highestValue);
   abstract protected LongStream scanningUnionQuery(long... values);
 
@@ -374,20 +400,21 @@ public abstract class StremeMap
         key = lowestKey;
         toKey = lowestKey;
       }
-      fileId = (long) DB.NULL;  
+      fileId = (long) DB.NULL;
     }
 
+    @Override
     public boolean hasNext()
     {
       while (true)
-      {				
+      {
         if (key == toKey || remaining == 0)
         {
           file = DB.fileManager.getNextKeyFile(StremeMap.this.mapGetter, fileId);
           if (file == null) return false;
-          fileId = file.id;		
-          if (file.fromKey+DB.db.KEYSTOAKEYFILE<key) continue;		
-          key = file.fromKey-1;					
+          fileId = file.id;
+          if (file.fromKey+DB.db.KEYSTOAKEYFILE<key) continue;
+          key = file.fromKey-1;
           toKey = key + DB.db.KEYSTOAKEYFILE;
           remaining = file.size();
           if (remaining==0)
@@ -397,7 +424,7 @@ public abstract class StremeMap
           }
         }
         key++;
-        if (key>highestKey) return false;			
+        if (key>highestKey) return false;
 
         if (file.read(file.base(key))==1)
         {
@@ -409,14 +436,16 @@ public abstract class StremeMap
             return true;
           }
         }
-      }	
+      }
     }
 
+    @Override
     public void forEachRemaining(LongConsumer action)
     {
       while (hasNext()) action.accept(nextLong());
     }
 
+    @Override
     public long nextLong()
     {
       return key;

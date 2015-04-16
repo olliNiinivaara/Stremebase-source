@@ -1,3 +1,14 @@
+/*
+ * ---------------------------------------------------------
+ * BEER-WARE LICENSED
+ * This file is based on original work by Olli Niinivaara.
+ * As long as you retain this notice you can do whatever
+ * you want with this stuff. If you meet him one day, and
+ * you think this stuff is worth it, you can buy him a
+ * beer in return.
+ * ---------------------------------------------------------
+ */
+
 package com.stremebase.map;
 
 import java.util.Arrays;
@@ -16,28 +27,44 @@ public class ArrayMap extends StremeMap
 
 
   /**
-   * Creates a new ArrayMap for associating an array of values with one key.
-   * The returned map is not indexed.
+   * Creates a new ArrayMap for associating a fixed-size array of values with one key.
+   * Supports cell-specific indexing.
    * The returned map is persistent iff the database is.
-   * 
+   *
    * @param mapName
    *          name for the map. Must be a database-wide unique value.
+   *  @param size Size of the array         
    */
   public ArrayMap(String mapName, int size)
   {
     super(mapName, size+1, DB.isPersisted());
   }
 
+  /**
+   * Creates a new ArrayMap for associating a fixed-size array of values with one key.
+   * Supports cell-specific indexing.
+   * The returned map is persistent iff the database is.
+   *
+   * @param mapName
+   *          name for the map. Must be a database-wide unique value.
+   *  @param size Size of the array 
+   *  @param persist whether the map is persisted        
+   */
   public ArrayMap(String mapName, int size, boolean persist)
   {
     super(mapName, size+1, persist);
   }
 
+  /**
+   * Returns the size of array (same for all keys)
+   * @return the length
+   */
   public int getArrayLength()
   {
     return this.getNodeSize()-1;
   }
 
+  @Override
   public void addIndex(byte indexType)
   {
     if (indexType == DB.ONE_TO_ONE || indexType == DB.MANY_TO_ONE)
@@ -53,24 +80,32 @@ public class ArrayMap extends StremeMap
     indexer.commit();
   }
 
+  @Override
   public void commit()
   {
     for (Indexer i: indices.values()) i.commit();
     super.commit();
   }
 
+  @Override
   public void close()
   {
     for (Indexer i: indices.values()) i.close();
     super.close();
   }
 
+  @Override
   public void clear()
   {
     for (Indexer i: indices.values()) i.clear();
     super.clear();
   }
 
+  /**
+   * Adds an index to a specific cell
+   * @param indexType the index type (either DB.ONE_TO_ONE or DB.MANY_TO_ONE)
+   * @param cell the index of the cell
+   */
   public void addIndextoCell(byte indexType, int cell)
   {
     if (indices.containsKey(cell)) return;
@@ -82,6 +117,11 @@ public class ArrayMap extends StremeMap
     if (!isEmpty() && (cIndexer.isEmpty())) reIndexCell(cell);
   }
 
+  /**
+   * Reindexes cell-specific index
+   * Mainly for internal use.
+   * @param cell the index of the index
+   */
   public void reIndexCell(int cell)
   {
     Indexer cIndexer = indices.get(cell);
@@ -90,11 +130,15 @@ public class ArrayMap extends StremeMap
     cIndexer.commit();
   }
 
+  /**
+   * Remoces an index
+   * @param cell the index of the index
+   */
   public void dropIndexFromCell(int cell)
   {
     Indexer i = indices.get(cell);
     if (i == null) return;
-    i.clear();    
+    i.clear();
     indices.put(cell, null);
   }
 
@@ -104,18 +148,13 @@ public class ArrayMap extends StremeMap
     if (newValues!=null) for (long v: newValues) indexer.index(key, v);
   }
 
-  /**
-   * Removes the given key from the map
-   * 
-   * @param key
-   *          the key to be removed
-   */
+  @Override
   public void remove(long key)
   {
     KeyFile buf = getData(key, false);
     if (buf == null) return;
 
-    if (isIndexed()) index(key, get(key), null); 
+    if (isIndexed()) index(key, get(key), null);
     for (int cell: indices.keySet()) indices.get(cell).remove(key, get(key, cell));
 
     int base = buf.base(key);
@@ -124,10 +163,10 @@ public class ArrayMap extends StremeMap
 
   /**
    * Returns the values associated with the key to the given array
-   * 
+   *
    * @param key
    *          the key
-   *  @param values an array where the values are written in. Must be large enough.     
+   *  @param values an array where the values are written in. Must be large enough.
    * @return true, if values exist
    */
   public boolean get(long key, long[] values)
@@ -142,9 +181,9 @@ public class ArrayMap extends StremeMap
 
   /**
    * Returns the values associated with the key, or null
-   * 
+   *
    * @param key
-   *          the key  
+   *          the key
    * @return values, or null if there are no values
    */
   public long[] get(long key)
@@ -154,6 +193,12 @@ public class ArrayMap extends StremeMap
     return values;
   }
 
+  /**
+   * Returns the value at given cell
+   * @param key the key
+   * @param index the cell
+   * @return value or DB.NULL
+   */
   public long get(long key, int index)
   {
     KeyFile buf = getData(key, false);
@@ -163,20 +208,9 @@ public class ArrayMap extends StremeMap
     return buf.read(base+1+index);
   }
 
-  /*
-   * Returns the value associated with the key that is currently streamed with keys()
-   * Usage:  map.keys().forEach(key -&gt; (map.value()...
-   * (Definitely not thread safe)
-   * @return the currently iterated value
-   *
-  public long value()
-  {
-    return iteratedValue;
-  }*/
-
   /**
    * Associates values with a key
-   * 
+   *
    * @param key
    *          the key
    * @param values
@@ -221,13 +255,6 @@ public class ArrayMap extends StremeMap
     buf.write(base+1+index, value);
   }
 
-  /**
-   * Returns the value associated with a key as a {@link LongStream}
-   * 
-   * @param key
-   *          the key
-   * @return the value or an empty stream if there's no value
-   */
   @Override
   public LongStream values(long key)
   {
@@ -244,7 +271,7 @@ public class ArrayMap extends StremeMap
   {
     return keys().filter(key ->
     {
-      //TODO: read arrays?
+      //TODO: bulk read arrays?
       return values(key).anyMatch(value -> (value!= DB.NULL && value >= lowestValue && value<=highestValue));
     });
   }
@@ -260,17 +287,28 @@ public class ArrayMap extends StremeMap
     });
   }
 
-  @Override
   protected int indexOf(long key, int fromIndex, long value)
   {
-    //TODO
-    throw new UnsupportedOperationException("TBD");
+    if (fromIndex<0 || fromIndex>getArrayLength()-1) throw new IndexOutOfBoundsException("Index out of bounds: "+fromIndex);
+    KeyFile buf = getData(key, false);
+    if (buf == null) return -1;
+    int base = buf.base(key);
+    if (buf.read(base) == 0) return -1;    
+    for (int i = fromIndex; i < getArrayLength(); i++) if (buf.read(base+1+i)==value) return i;
+    return -1;
   }
 
+  /**
+   * A range query that considers only values at a given index
+   * @param index the cell
+   * @param lowestValue lowest acceptable value
+   * @param highestValue highest acceptable value
+   * @return matching keys
+   */
   public LongStream queryByCell(int index, long lowestValue, long highestValue)
   {
     if (!indices.containsKey(index)) return scanningQueryByCell(index, lowestValue, highestValue);
-    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue).sorted();  
+    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue).sorted();
     return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue);
   }
 
@@ -283,10 +321,16 @@ public class ArrayMap extends StremeMap
     });
   }
 
+  /**
+   * A OR-query that considers only values at a given index
+   * @param index the cell
+   * @param values the acceptable values
+   * @return matching keys
+   */
   public LongStream unionQueryByCell(int index, long...values)
   {
     if (!indices.containsKey(index)) return scanningUnionQueryByCell(index, values);
-    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromSet(values).sorted();  
+    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromSet(values).sorted();
     return indices.get(index).getKeysWithValueFromSet(values);
   }
 

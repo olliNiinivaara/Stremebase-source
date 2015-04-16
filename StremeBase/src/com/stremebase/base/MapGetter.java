@@ -20,13 +20,17 @@ import com.stremebase.file.ValueFile;
 import com.stremebase.file.FileManager.ValueSlot;
 
 
+/**
+ * The secret bridge between the high level map api and the low level storage engine
+ * For internal use only.
+ */
 public class MapGetter
 {
   protected final StremeMap map;
 
   MapGetter(StremeMap map)
   {
-    this.map = map;	
+    this.map = map;
   }
 
   public StremeMap map()
@@ -41,13 +45,13 @@ public class MapGetter
 
   public long getLargestValueFileId()
   {
-    return map.largestValueFileId;	
+    return map.largestValueFileId;
   }
 
   public long getNextValueFileId()
   {
     if (map.largestValueFileId==DB.NULL) map.largestValueFileId = 0;
-    return ++map.largestValueFileId;	
+    return ++map.largestValueFileId;
   }
 
   public TreeMap<Long, KeyFile> getKeyFiles()
