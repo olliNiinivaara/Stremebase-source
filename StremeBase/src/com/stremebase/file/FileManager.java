@@ -142,7 +142,7 @@ public class FileManager
 
   public void commitAll()
   {
-    for (MapGetter md: loadedMaps.values()) commit(md);
+    for (MapGetter md: loadedMaps.values()) md.map().commit();
   }
 
   public void closeAll()

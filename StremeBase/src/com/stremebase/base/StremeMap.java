@@ -71,7 +71,11 @@ public abstract class StremeMap
    */
   public void addIndex(byte indexType)
   {
-    if (indexer!=null) return;
+    if (indexer!=null)
+    {
+      if (indexType==DB.NO_INDEX) dropIndex();
+      return;
+    }
     indexer = new Indexer(indexType, this);
     if (!isEmpty() && (indexer.isEmpty())) reIndex();
   }

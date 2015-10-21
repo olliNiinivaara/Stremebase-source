@@ -118,29 +118,34 @@ public class DB
   public static final long NULL = Long.MIN_VALUE;
 
   /**
+   * Index type: No index
+   */
+  public static final byte NO_INDEX = 0;
+
+  /**
    * Index type: Every key is associated with at most one value and vice versa
    */
-  public static final byte ONE_TO_ONE = 0;
+  public static final byte ONE_TO_ONE = 1;
 
   /**
    * Index type: Every key is associated with at most one value.
    */
-  public static final byte MANY_TO_ONE = 1;
+  public static final byte MANY_TO_ONE = 2;
 
   /**
    * Index type: Every value is associated with at most one key.
    */
-  public static final byte ONE_TO_MANY = 2;
+  public static final byte ONE_TO_MANY = 3;
 
   /**
    * Index type: Every key is associated with any value but at most once.
    */
-  public static final byte MANY_TO_MANY = 3;
+  public static final byte MANY_TO_MANY = 4;
 
   /**
    * Index type: A key may be associated even with the same value more than once.
    */
-  public static final byte MANY_TO_MULTIMANY = 4;
+  public static final byte MANY_TO_MULTIMANY = 5;
 
   private static boolean persisted = true;
 

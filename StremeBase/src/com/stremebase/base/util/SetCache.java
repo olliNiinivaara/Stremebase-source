@@ -44,7 +44,7 @@ public class SetCache
 
   public long[] get(final long key)
   {
-    long[] hashedKeys = keyMap[(int) key % keyMap.length];
+    long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
 
     for (int i = 1; i<hashedKeys[0]; i+=2)
       if (hashedKeys[i]==key) return memory[(int) (hashedKeys[i+1])];
@@ -53,7 +53,7 @@ public class SetCache
 
   public void put(final long key, final long[] value)
   {
-    long[] hashedKeys = keyMap[(int) key % keyMap.length];
+    long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
     for (int i = 1; i<hashedKeys[0]; i+=2)
       if (hashedKeys[i]==key)
       {
@@ -71,7 +71,7 @@ public class SetCache
 
   public void commit(long key)
   {
-    long[] hashedKeys = keyMap[(int) key % keyMap.length];
+    long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
     for (int i = 1; i<hashedKeys[0]; i+=2)
     {
       setMap.flush(hashedKeys[i], memory[(int) (hashedKeys[i+1])]);
@@ -88,7 +88,7 @@ public class SetCache
 
   public void remove(final long key)
   {
-    long[] hashedKeys = keyMap[(int) key % keyMap.length];
+    long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
     for (int i = 1; i<hashedKeys[0]; i+=2)
       if (hashedKeys[i]==key)
       {
