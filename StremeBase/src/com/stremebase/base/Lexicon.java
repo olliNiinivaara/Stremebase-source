@@ -9,7 +9,7 @@
  * ---------------------------------------------------------
  */
 
-package com.stremebase.base.util;
+package com.stremebase.base;
 
 
 import java.util.Spliterator;
@@ -18,48 +18,48 @@ import java.util.function.LongConsumer;
 import java.util.stream.LongStream;
 import java.util.stream.StreamSupport;
 
-import com.stremebase.base.DB;
-import com.stremebase.map.ListMap;
+import com.stremebase.map.StackListMap;
 
 
 /**
  * Converts strings to longs and back.
- * Used internally as a singleton instance.
- * Application access via {@link com.stremebase.base.To}
+ * <p>
+ * Used internally
+ * <p>
+ * High-level access via {@link com.stremebase.dal.Value}
+ * @author olli
  */
 public class Lexicon
 {
   protected static final int width = 30*2+2;
 
-  protected static ListMap strings;
-  protected static final StringBuffer bufs = new StringBuffer();
+  protected StackListMap strings;
+  protected final StringBuffer bufs = new StringBuffer();
 
-  private static final Lexicon instance = new Lexicon();
-  private Lexicon() {}
-
-  public static void initialize(boolean persist)
+  public Lexicon(DB db)
   {
-    if (strings == null) strings = new ListMap("Stremebase_lexicon", width, DB.isPersisted());
+    db.defineMap("Stremebase_lexicon", StackListMap.class, db.props().add("INITIALCAPACITY", width).build(), true);
+    strings = db.getMap("Stremebase_lexicon");
   }
 
-  public static void commit()
+  public void commit()
   {
-    strings.commit();
+    strings.flush();
   }
 
-  public static long[] useText(String sentence, String splitter, boolean put)
+  public long[] useText(String sentence, String splitter, boolean put)
   {
     return useWords(put, sentence.split(splitter));
   }
 
-  public static long[] useWords(boolean put, CharSequence... words)
+  public long[] useWords(boolean put, CharSequence... words)
   {
     long[] result = new long[words.length];
     for (int i=0; i<result.length; i++) result[i] = useWord(words[i], put);
     return result;
   }
 
-  synchronized public static long useWord(CharSequence word, boolean put)
+  public long useWord(CharSequence word, boolean put)
   {
     if (word.length()==0)
     {
@@ -76,21 +76,21 @@ public class Lexicon
       int i = 0;
       while (true)
       {
-        long existing = strings.get(key, i+2);
+        long existing = get(key, i+2);
 
         if (existing==DB.NULL)
         {
           if (!put) return DB.NULL;
-          strings.put(key, i+2, word.charAt(c));
+          put(key, i+2, word.charAt(c));
           final int nextPosition = addChar(word.charAt(c), key, c==word.length()-1);
-          strings.put(key, i+3, nextPosition);
+          put(key, i+3, nextPosition);
           key = nextPosition;
           continue outerloop;
         }
         else if (existing==word.charAt(c))
         {
-          key = (int)strings.get(key, i+3);
-          if (put && c==word.length()-1) strings.put(key, 0, (int)existing);
+          key = (int)get(key, i+3);
+          if (put && c==word.length()-1) put(key, 0, (int)existing);
           continue outerloop;
         }
         i+=2;
@@ -100,25 +100,25 @@ public class Lexicon
     return key;
   }
 
-  protected static int addChar(int chr, int previouscharKey, boolean completeWord)
+  protected int addChar(int chr, int previouscharKey, boolean completeWord)
   {
-    long key = strings.getLargestKey()+1;
+    long key = getNextKey();
     if (key<=Character.MAX_VALUE) key = Character.MAX_VALUE+1;
     if (!completeWord) chr = -chr;
-    strings.put(key, 0, chr);
-    strings.put(key, 1, previouscharKey);
+    put(key, 0, chr);
+    put(key, 1, previouscharKey);
     return (int)key;
   }
 
-  public static long getIfExists(CharSequence word)
+  public long getIfWord(CharSequence word)
   {
     long key = useWord(word, false);
-    if (key==DB.NULL) return key;
-    if (strings.get(key, 0)>0) return key;
-    return DB.NULL;
+    if (key==DB.NULL) return DB.NULL;
+    if (get(key, 0)<=0) return DB.NULL;
+    return key;
   }
 
-  public static void getWord(long key, StringBuilder string)
+  public void getWord(long key, StringBuilder string)
   {
     string.setLength(0);
 
@@ -128,22 +128,37 @@ public class Lexicon
       return;
     }
 
-    if (key > Character.MAX_VALUE && strings.get(key, 0)<0) return;
+    if (key > Character.MAX_VALUE && get(key, 0)<0) return;
 
     while (key > Character.MAX_VALUE)
     {
-      string.append((char)(Math.abs(strings.get(key, 0))));
-      key = strings.get(key, 1);
+      string.append((char)(Math.abs(get(key, 0))));
+      key = get(key, 1);
     }
     string.append((char)key);
     string.reverse();
   }
 
-  public static LongStream wordsWithPrefix(CharSequence prefix)
+  public LongStream wordsWithPrefix(CharSequence prefix)
   {
     long key = useWord(prefix, false);
     if (key==DB.NULL) return LongStream.empty();
-    return StreamSupport.longStream(instance.new WordSpliterator(key), false);
+    return StreamSupport.longStream(new WordSpliterator(key), false);
+  }
+
+  protected long get(long key, int index)
+  {
+    return strings.get(key, index);
+  }
+
+  protected void put(long key, int index, long value)
+  {
+    strings.put(key, index, value);
+  }
+
+  protected long getNextKey()
+  {
+    return strings.getLargestKey()+1;
   }
 
   private class WordSpliterator implements Spliterator.OfLong
@@ -184,13 +199,13 @@ public class Lexicon
         int i = 0;
         while (true)
         {
-          final long existing = Lexicon.strings.get(key, i+2);
+          final long existing = get(key, i+2);
           if (existing==0 || existing == DB.NULL) break;
-          stack.push(Lexicon.strings.get(key, i+3));
+          stack.push(get(key, i+3));
           i+=2;
         }
 
-        if (Lexicon.strings.get(key, 0)>0)
+        if (get(key, 0)>0)
         {
           action.accept(key);
           return true;

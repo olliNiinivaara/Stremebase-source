@@ -26,14 +26,14 @@ import java.util.function.LongConsumer;
 import java.util.stream.LongStream;
 import java.util.stream.StreamSupport;
 
-import com.stremebase.file.FileManager;
 import com.stremebase.file.KeyFile;
 import com.stremebase.file.ValueFile;
 import com.stremebase.file.FileManager.ValueSlot;
-import com.stremebase.map.ListMap;
+import com.stremebase.map.StackListMap;
 
 /**
- * Abstract base class for maps that grow their value storages as needed (lists, sets, etc.) 
+ * Abstract base class for maps that grow their value storages as needed (lists, sets, etc.)
+ * @author olli
  */
 public abstract class DynamicMap extends StremeMap
 {
@@ -41,14 +41,16 @@ public abstract class DynamicMap extends StremeMap
   protected static final int pSlotSize = 2;
   protected static final int pSlotFileId = 3;
   protected static final int pSlotFilePosition = 4;
-  protected final int initialCapacity;
+  protected int initialCapacity;
 
   protected TreeMap<Long, List<ValueSlot>> freeValueSlots;
 
-  protected DynamicMap(String mapName, int initialCapacity, boolean persist)
+  @Override
+  public void initialize(String mapName, Catalog catalog)
   {
-    super(mapName, 5, persist);
-    this.initialCapacity = initialCapacity;
+    catalog.setProperty(Catalog.NODESIZE, this, 5);
+    super.initialize(mapName, catalog);
+    initialCapacity = (int) catalog.getProperty(Catalog.INITIALCAPACITY, this);
   }
 
   @Override
@@ -57,7 +59,7 @@ public abstract class DynamicMap extends StremeMap
     super.close();
     if (!persisted || freeValueSlots == null) return;
     FileOutputStream fos;
-    String free = DB.fileManager.getDirectory(mapGetter, 'F', true)+"free.ser";
+    String free = fileManager.getDirectory(mapGetter, 'F', true)+"free.ser";
     try
     {
       fos = new FileOutputStream(free);
@@ -74,7 +76,7 @@ public abstract class DynamicMap extends StremeMap
 
   @Override
   @SuppressWarnings("unchecked")
-  public TreeMap<Long, List<ValueSlot>> getFreeValueSlots()
+  protected TreeMap<Long, List<ValueSlot>> getFreeValueSlots()
   {
     if (freeValueSlots!=null) return freeValueSlots;
 
@@ -84,8 +86,8 @@ public abstract class DynamicMap extends StremeMap
       return freeValueSlots;
     }
 
-    FileManager.loadingMap = mapGetter;
-    File free = new File(DB.fileManager.getDirectory(mapGetter, 'F', false)+"free.ser");
+    fileManager.loadingMap = mapGetter;
+    File free = new File(fileManager.getDirectory(mapGetter, 'F', false)+"free.ser");
     if (!free.exists())
     {
       freeValueSlots = new TreeMap<Long, List<ValueSlot>>();
@@ -96,11 +98,11 @@ public abstract class DynamicMap extends StremeMap
     {
       FileInputStream in = new FileInputStream(free);
       ObjectInputStream ois = new ObjectInputStream(in);
-      FileManager.loadingMap=mapGetter;
+      fileManager.loadingMap=mapGetter;
       freeValueSlots = (TreeMap<Long, List<ValueSlot>>) ois.readObject();
       ois.close();
       free.delete();
-      for (List<ValueSlot> slotBag: freeValueSlots.values()) FileManager.cachedFreeSlots+=slotBag.size();
+      for (List<ValueSlot> slotBag: freeValueSlots.values()) fileManager.cachedFreeSlots+=slotBag.size();
     }
     catch (Exception e)
     {
@@ -110,8 +112,10 @@ public abstract class DynamicMap extends StremeMap
     return freeValueSlots;
   }
 
-  protected long getSize(long key)
+  @Override
+  public long getValueCount(long key)
   {
+    if (key==DB.NULL) return 0;
     KeyFile header = getData(key, false);
     if (header==null) return 0;
     return (int) header.read(header.base(key)+pLength);
@@ -131,7 +135,7 @@ public abstract class DynamicMap extends StremeMap
       long[] newList = new long[index+1];
       newList[index] = value;
       putToNewSlot(key, newList);
-      if (isIndexed() && (!(this instanceof ListMap && index==0))) if (value!=DB.NULL) indexer.index(key, value);
+      if (isIndexed() && (!(this instanceof StackListMap && index==0))) if (value!=DB.NULL) indexer.index(key, value);
       header.setActive(base, true);
       return;
     }
@@ -162,9 +166,9 @@ public abstract class DynamicMap extends StremeMap
       position = (int)fs.slotPosition;
     }
 
-    if (oldValue!=value) if (isIndexed() && (!(this instanceof ListMap && index==0)))
+    if (oldValue!=value && isIndexed())
     {
-      if (oldValue!=DB.NULL) indexer.remove(key, oldValue);
+      if (oldValue!=DB.NULL) indexer.unIndex(key, oldValue);
       if (value!=DB.NULL) indexer.index(key, value);
     }
   }
@@ -189,7 +193,7 @@ public abstract class DynamicMap extends StremeMap
   {
     KeyFile header = getData(key, false);
     if (header==null) return;
-    if (isIndexed()) values(key).forEach(value -> indexer.remove(key, value));
+    if (isIndexed()) values(key).forEach(value -> indexer.unIndex(key, value));
     header.setActive(header.base(key), false);
     ValueFile slot = getSlot(key);
     if (slot!=null) releaseSlot(key);
@@ -226,7 +230,7 @@ public abstract class DynamicMap extends StremeMap
     if (header==null) throw new IndexOutOfBoundsException("Cannot get nonexistent list.");
     int base = header.base(key);
     if (header.read(base)==0) throw new IndexOutOfBoundsException("Cannot get nonexistent list.");
-    ValueFile file = DB.fileManager.getValueFile(mapGetter, header.read(base+pSlotFileId));
+    ValueFile file = fileManager.getValueFile(mapGetter, header.read(base+pSlotFileId));
     int length = (int)header.read(base+pLength);
     if (length>toArray.length) length = toArray.length;
     file.readToArray((int)header.read(base+pSlotFilePosition), toArray, length);
@@ -234,18 +238,18 @@ public abstract class DynamicMap extends StremeMap
 
   protected boolean listEquals(long key, long[] list)
   {
-    if (getSize(key)!=list.length) return false;
+    if (getValueCount(key)!=list.length) return false;
     long[] values = new long[list.length];
     get(key, values);
     return Arrays.equals(list, values);
   }
 
-  protected LongStream values(long key, boolean skipNulls, boolean list)
+  protected LongStream values(long key, boolean skipNulls)
   {
-    return StreamSupport.longStream(spliterator(key, skipNulls, list), false);
+    return StreamSupport.longStream(spliterator(key, skipNulls), false);
   }
 
-  protected Spliterator.OfLong spliterator(long key, boolean skipNulls, boolean list)
+  protected Spliterator.OfLong spliterator(long key, boolean skipNulls)
   {
     long length = 0;
     KeyFile header = getData(key, false);
@@ -255,7 +259,7 @@ public abstract class DynamicMap extends StremeMap
     length = header.read(base+pLength);
     if (length==0) return Spliterators.emptyLongSpliterator();
 
-    return Spliterators.spliterator(new ListIterator(key, length, skipNulls, list), length,
+    return Spliterators.spliterator(new ListIterator(key, length, skipNulls), length,
         java.util.Spliterator.IMMUTABLE | java.util.Spliterator.NONNULL | java.util.Spliterator.ORDERED);
   }
 
@@ -264,7 +268,7 @@ public abstract class DynamicMap extends StremeMap
     KeyFile header = getData(key, true);
     int base = header.base(key);
 
-    if (!header.setActive(base, true)) DB.fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));
+    if (!header.setActive(base, true)) fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));
 
     header.write(base+pLength, length);
     header.write(base+pSlotSize, slotInfo.slotSize);
@@ -276,13 +280,13 @@ public abstract class DynamicMap extends StremeMap
   {
     KeyFile header = getData(key, false);
     int base = header.base(key);
-    if (header.setActive(base, false)) DB.fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));
+    if (header.setActive(base, false)) fileManager.releaseSlot(mapGetter, header.read(base+pSlotFileId), header.read(base+pSlotSize), header.read(base+pSlotFilePosition));
   }
 
   protected ValueSlot putToNewSlot(long key, long[] values)
   {
     int slotSize = values.length<initialCapacity ? initialCapacity : values.length * 2;
-    final ValueSlot slot = DB.fileManager.getFreeSlot(mapGetter, slotSize);
+    final ValueSlot slot = fileManager.getFreeSlot(mapGetter, slotSize);
     writeData(slot, values);
     createHeader(key, values.length, slot);
     return slot;
@@ -297,7 +301,7 @@ public abstract class DynamicMap extends StremeMap
     int base = header.base(key);
     if (header.read(base)==0) return null;
     position = (int)header.read(base+pSlotFilePosition);
-    return DB.fileManager.getValueFile(mapGetter, header.read(base+pSlotFileId));
+    return fileManager.getValueFile(mapGetter, header.read(base+pSlotFileId));
   }
 
   protected void writeData(ValueSlot slotInfo, long[] values)
@@ -316,15 +320,10 @@ public abstract class DynamicMap extends StremeMap
     long current = DB.NULL;
     final boolean skipNulls;
 
-    public ListIterator(long key, long length, boolean skipNulls, boolean list)
+    public ListIterator(long key, long length, boolean skipNulls)
     {
       slot = getSlot(key);
-      if (list)
-      {
-        remaining = (int)slot.read(position);
-        position+=1;
-      }
-      else remaining = (int)length;
+      remaining = (int)length;
       pos = position;
       this.skipNulls = skipNulls;
     }

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import com.stremebase.base.Catalog;
 import com.stremebase.base.DB;
 import com.stremebase.base.DynamicMap;
 import com.stremebase.base.MapGetter;
@@ -32,12 +33,13 @@ import com.stremebase.base.MapGetter;
  * The low level storage engine.
  * for internal use only.
  */
-public class FileManager
+public class FileManager implements AutoCloseable
 {
-  public static MapGetter loadingMap;
-  public static volatile int cachedFreeSlots = 0;
+  public MapGetter loadingMap;
+  public volatile int cachedFreeSlots = 0;
 
-  protected static final Map<String, MapGetter> loadedMaps = new HashMap<>();
+  protected final Map<String, MapGetter> loadedMaps = new HashMap<>();
+  protected final Catalog catalog;
 
   public class ValueSlot implements Serializable
   {
@@ -63,13 +65,18 @@ public class FileManager
 
     private void readObject(ObjectInputStream o) throws IOException, ClassNotFoundException
     {
-      this.valueFile = DB.fileManager.getValueFile(loadingMap, o.readLong());
+      this.valueFile = getValueFile(loadingMap, o.readLong());
       this.slotPosition = o.readLong();
       this.slotSize = o.readLong();
     }
   }
 
-  public static void deleteDir(File dir)
+  public FileManager(Catalog catalog)
+  {
+    this.catalog = catalog;
+  }
+
+  public void deleteDir(File dir)
   {
     if (dir==null || !dir.exists()) return;
     File[] files = dir.listFiles();
@@ -79,8 +86,8 @@ public class FileManager
 
   public String getDirectory(MapGetter pd, char type, boolean create)
   {
-    String dir = DB.db.DIRECTORY+pd.map().getMapName()+File.separatorChar+type+File.separatorChar;
-    if (DB.isPersisted())
+    String dir = catalog.getDirectory(pd.map(), type);
+    if (catalog.db.PERSISTED)
     {
       File f = new File(dir);
       if (create && !f.exists()) f.mkdirs();
@@ -100,7 +107,7 @@ public class FileManager
     return DB.NULL;
   }
 
-  public void commit(MapGetter property)
+  public void flush(MapGetter property)
   {
     TreeMap<Long, KeyFile> files =  property.getKeyFiles();
     for (KeyFile file: files.values()) file.commit();
@@ -132,7 +139,7 @@ public class FileManager
       }
     }
 
-    if (property.map().isPersisted()) deleteDir(new File(DB.db.DIRECTORY+property.map().getMapName()));
+    //if (property.map().isPersisted()) deleteDir(new File(catalog.getDirectory(property.map(), '\0')));
   }
 
   public void close(MapGetter map)
@@ -140,12 +147,13 @@ public class FileManager
     loadedMaps.remove(map.map().getMapName());
   }
 
-  public void commitAll()
+  public void flushAll()
   {
-    for (MapGetter md: loadedMaps.values()) md.map().commit();
+    for (MapGetter md: loadedMaps.values()) md.map().flush();
   }
 
-  public void closeAll()
+  @Override
+  public void close()
   {
     loadedMaps.clear();
   }
@@ -164,7 +172,7 @@ public class FileManager
     for (File f: fileList)
     {
       long id = Long.parseLong(f.getName().substring(2, f.getName().length()-3));
-      KeyFile file = new KeyFile(id, f.getAbsolutePath(), pd.getNodeSize(), (pd.map().isPersisted()));
+      KeyFile file = new KeyFile(id, f.getAbsolutePath(), pd.getNodeSize(), pd.getKeysToaKeyFile(), (catalog.db.PERSISTED && pd.map().isPersisted()));
       files.put(id, file);
     }
   }
@@ -183,7 +191,7 @@ public class FileManager
     {
       long id = Long.parseLong(f.getName().substring(2, f.getName().length()-3));
       if (id>largestId) largestId = id;
-      ValueFile file = new ValueFile(id, f.getAbsolutePath(), DB.NULL, (pd.map().isPersisted()));
+      ValueFile file = new ValueFile(id, f.getAbsolutePath(), DB.NULL, catalog.db.PERSISTED && pd.map().isPersisted());
       files.put(id, file);
     }
 
@@ -194,16 +202,16 @@ public class FileManager
   {
     Long nextId = property.getKeyFiles().ceilingKey(fileId+1);
     if (nextId==null) return null;
-    return getKeyFile(property, nextId, DB.NULL);
+    return getKeyFile(property, nextId, DB.NULL, DB.NULL);
   }
 
-  public KeyFile getKeyFile(MapGetter property, long fileId, long nodeSize)
+  public KeyFile getKeyFile(MapGetter property, long fileId, long nodeSize, long keysToAKeyFile)
   {
     KeyFile result = property.getKeyFiles().get(fileId);
     if (nodeSize!=DB.NULL && result == null)
     {
       String fileName = getDirectory(property, 'K', true)+"db"+fileId+".db";
-      result = new KeyFile(fileId, fileName, nodeSize, property.map().isPersisted());
+      result = new KeyFile(fileId, fileName, nodeSize, keysToAKeyFile, (catalog.db.PERSISTED && property.map().isPersisted()));
       property.getKeyFiles().put(fileId, result);
     }
     return result;
@@ -240,10 +248,18 @@ public class FileManager
     long fileId = property.getNextValueFileId();
     String fileName = getDirectory(property, 'V', true)+"db"+fileId+".db";
     int exp = (int) Math.pow(2, fileId-1);
-    long maxSize = DB.db.MAXVALUEFILESIZE;
-    if (exp < Integer.MAX_VALUE / exp) maxSize = exp*DB.db.INITIALVALUEFILESIZE;
+    long maxSize = (long) catalog.getProperty(Catalog.MAXVALUEFILESIZE, property.map());
+
+    int initialSize;
+    if (!property.map().isPersisted() || property.map().getMapName().contains("_posIndex") || property.map().getMapName().contains("_negIndex"))
+      initialSize = (int) catalog.getProperty(Catalog.INITIALMEMORYANDINDEXVALUEFILESIZE, property.map());
+    else initialSize = (int) catalog.getProperty(Catalog.INITIALVALUEFILESIZE, property.map());
+
+    if (exp < Integer.MAX_VALUE / exp) maxSize = exp*initialSize;
     if (requiredSize < maxSize) requiredSize = maxSize;
-    ValueFile file = new ValueFile(fileId, fileName, requiredSize, property.map().isPersisted());
+
+    ValueFile file = new ValueFile(fileId, fileName, requiredSize, catalog.db.PERSISTED && property.map().isPersisted());
+
     Map<Long, ValueFile> files = property.getValueFiles();
     files.put(fileId, file);
     return file;
@@ -267,7 +283,9 @@ public class FileManager
 
     TreeMap<Long, List<ValueSlot>> slots = property.getFreeValueSlots();
 
-    if (cachedFreeSlots >= DB.db.MAXCACHEDFREESLOTS)
+    int maxSlots = (int) catalog.getProperty(Catalog.MAXCACHEDFREESLOTS, property.map());
+
+    if (cachedFreeSlots >= maxSlots)
     {
       Long smallest = slots.firstKey();
       if (slotSize == smallest) return;

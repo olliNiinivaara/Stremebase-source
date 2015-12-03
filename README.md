@@ -1,10 +1,19 @@
 # Stremebase
-A low level embeddable multi-model storage engine tightly coupled with a high level java 8 streams api compliant interface.
+The Java programmer's database engine.
 
 Learn more at https://olliniinivaara.github.io/Stremebase/
 
 
 #Version history
+
+v.0.7 -- 2015-12-03
+- database metadata Catalog
+- Data Access Layer  
+
+
+v.0.6.3 -- 2015-10-21
+- Bug fixes  
+
 
 v.0.6.2 -- 2015-04-16
 - Code cleanup  

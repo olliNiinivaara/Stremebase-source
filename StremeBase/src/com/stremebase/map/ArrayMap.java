@@ -21,55 +21,31 @@ import com.stremebase.base.StremeMap;
 import com.stremebase.base.Indexer;
 import com.stremebase.file.KeyFile;
 
+/**
+ * A map that stores a fixed-size array of longs
+ * @author olli
+ *
+ */
 public class ArrayMap extends StremeMap
 {
   protected final Map<Integer, Indexer> indices = new HashMap<>();
 
-
   /**
-   * Creates a new ArrayMap for associating a fixed-size array of values with one key.
-   * Supports cell-specific indexing.
-   * The returned map is persistent iff the database is.
-   *
-   * @param mapName
-   *          name for the map. Must be a database-wide unique value.
-   *  @param size Size of the array         
-   */
-  public ArrayMap(String mapName, int size)
-  {
-    super(mapName, size+1, DB.isPersisted());
-  }
-
-  /**
-   * Creates a new ArrayMap for associating a fixed-size array of values with one key.
-   * Supports cell-specific indexing.
-   * The returned map is persistent iff the database is.
-   *
-   * @param mapName
-   *          name for the map. Must be a database-wide unique value.
-   *  @param size Size of the array 
-   *  @param persist whether the map is persisted        
-   */
-  public ArrayMap(String mapName, int size, boolean persist)
-  {
-    super(mapName, size+1, persist);
-  }
-
-  /**
-   * Returns the size of array (same for all keys)
+   * Returns the length of array (same for all keys)
    * @return the length
    */
-  public int getArrayLength()
+  @Override
+  public long getValueCount(long key)
   {
     return this.getNodeSize()-1;
   }
 
   @Override
-  public void addIndex(byte indexType)
+  protected void addIndex(DB db, byte indexType)
   {
     if (indexType == DB.ONE_TO_ONE || indexType == DB.MANY_TO_ONE)
       throw new IllegalArgumentException("This indextype can be used only for single cells (method addIndextoCell)");
-    super.addIndex(indexType);
+    super.addIndex(db, indexType);
   }
 
   @Override
@@ -77,14 +53,14 @@ public class ArrayMap extends StremeMap
   {
     indexer.clear();
     keys().forEach(key -> (index(key, null, get(key))));
-    indexer.commit();
+    indexer.flush();
   }
 
   @Override
-  public void commit()
+  public void flush()
   {
-    for (Indexer i: indices.values()) i.commit();
-    super.commit();
+    for (Indexer i: indices.values()) i.flush();
+    super.flush();
   }
 
   @Override
@@ -102,17 +78,28 @@ public class ArrayMap extends StremeMap
   }
 
   /**
+   * Whether cell is indexed
+   * @param cell the cell index
+   * @return true if is
+   */
+  public boolean isCellIndexed(int cell)
+  {
+    return indices.containsKey(cell);
+  }
+
+  /**
    * Adds an index to a specific cell
+   * @param db the database
    * @param indexType the index type (either DB.ONE_TO_ONE or DB.MANY_TO_ONE)
    * @param cell the index of the cell
    */
-  public void addIndextoCell(byte indexType, int cell)
+  public void addIndextoCell(DB db, byte indexType, int cell)
   {
-    if (indices.containsKey(cell)) return;
+    if (isCellIndexed(cell)) return;
     if (indexType != DB.ONE_TO_ONE && indexType != DB.MANY_TO_ONE)
       throw new IllegalArgumentException("For single cells, indextype must be either DB.ONE_TO_ONE or DB.MANY_TO_ONE");
 
-    Indexer cIndexer = new Indexer(indexType, this, cell);
+    Indexer cIndexer = new Indexer(db, this, indexType, cell);
     indices.put(cell, cIndexer);
     if (!isEmpty() && (cIndexer.isEmpty())) reIndexCell(cell);
   }
@@ -127,11 +114,11 @@ public class ArrayMap extends StremeMap
     Indexer cIndexer = indices.get(cell);
     cIndexer.clear();
     keys().forEach(key -> (cIndexer.index(key, get(key, cell))));
-    cIndexer.commit();
+    cIndexer.flush();
   }
 
   /**
-   * Remoces an index
+   * Removes an index
    * @param cell the index of the index
    */
   public void dropIndexFromCell(int cell)
@@ -144,7 +131,7 @@ public class ArrayMap extends StremeMap
 
   protected void index(long key, long[] oldValues, long[] newValues)
   {
-    if (oldValues!=null) for (long v: oldValues) indexer.remove(key, v);
+    if (oldValues!=null) for (long v: oldValues) indexer.unIndex(key, v);
     if (newValues!=null) for (long v: newValues) indexer.index(key, v);
   }
 
@@ -155,10 +142,23 @@ public class ArrayMap extends StremeMap
     if (buf == null) return;
 
     if (isIndexed()) index(key, get(key), null);
-    for (int cell: indices.keySet()) indices.get(cell).remove(key, get(key, cell));
+    for (int cell: indices.keySet()) indices.get(cell).unIndex(key, get(key, cell));
 
     int base = buf.base(key);
     buf.setActive(base, false);
+  }
+
+  @Override
+  public void removeValue(long key, long value)
+  {
+    if (value==DB.NULL) return;
+
+    while (true)
+    {
+      int index = indexOf(key, 0, value);
+      if (index==-1) return;
+      put(key, index, DB.NULL);
+    }
   }
 
   /**
@@ -218,11 +218,19 @@ public class ArrayMap extends StremeMap
    */
   public void put(long key, long[] values)
   {
+    if (values==null)
+    {
+      remove(key);
+      return;
+    }
+
     if (key < 0) throw new IllegalArgumentException("Negative keys are not supported (" + key + ")");
     KeyFile buf = getData(key, true);
     int base = buf.base(key);
+
     long[] oldValues = null;
-    if (!buf.setActive(base, true)) if (isIndexed()) oldValues = get(key);
+
+    if (!buf.setActive(base, true) && isIndexed()) oldValues = get(key);
     if (isIndexed()) index(key, oldValues, values);
     buf.write(base+1, values);
   }
@@ -241,19 +249,25 @@ public class ArrayMap extends StremeMap
       if (olds) oldValue = buf.read(base + index + 1);
       if (isIndexed())
       {
-        if (oldValue!=DB.NULL) indexer.remove(key, oldValue);
+        if (oldValue!=DB.NULL) indexer.unIndex(key, oldValue);
         if (value!=DB.NULL) indexer.index(key, value);
       }
 
       Indexer celli = indices.get(index);
       if (celli!=null)
       {
-        if (oldValue!=DB.NULL) celli.remove(key, oldValue);
+        if (oldValue!=DB.NULL) celli.unIndex(key, oldValue);
         if (value!=DB.NULL) celli.index(key, value);
       }
     }
     buf.write(base+1+index, value);
   }
+
+  /*public void fill(long key, long value)
+  {
+    //TODO: ArrayCopy...
+    throw new UnsupportedOperationException("this needs implementing...");
+  }*/
 
   @Override
   public LongStream values(long key)
@@ -289,12 +303,12 @@ public class ArrayMap extends StremeMap
 
   protected int indexOf(long key, int fromIndex, long value)
   {
-    if (fromIndex<0 || fromIndex>getArrayLength()-1) throw new IndexOutOfBoundsException("Index out of bounds: "+fromIndex);
+    if (fromIndex<0 || fromIndex>getValueCount(DB.NULL)-1) throw new IndexOutOfBoundsException("Index out of bounds: "+fromIndex);
     KeyFile buf = getData(key, false);
     if (buf == null) return -1;
     int base = buf.base(key);
-    if (buf.read(base) == 0) return -1;    
-    for (int i = fromIndex; i < getArrayLength(); i++) if (buf.read(base+1+i)==value) return i;
+    if (buf.read(base) == 0) return -1;
+    for (int i = fromIndex; i < getValueCount(DB.NULL); i++) if (buf.read(base+1+i)==value) return i;
     return -1;
   }
 
@@ -307,9 +321,9 @@ public class ArrayMap extends StremeMap
    */
   public LongStream queryByCell(int index, long lowestValue, long highestValue)
   {
-    if (!indices.containsKey(index)) return scanningQueryByCell(index, lowestValue, highestValue);
-    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue).sorted();
-    return indices.get(index).getKeysWithValueFromRange(lowestValue, highestValue);
+    if (!isCellIndexed(index)) return scanningQueryByCell(index, lowestValue, highestValue);
+    if (isIndexQuerySorted()) return indices.get(index).getKeysForValuesInRange(lowestValue, highestValue).sorted();
+    return indices.get(index).getKeysForValuesInRange(lowestValue, highestValue);
   }
 
   protected LongStream scanningQueryByCell(int index, long lowestValue, long highestValue)
@@ -330,10 +344,36 @@ public class ArrayMap extends StremeMap
   public LongStream unionQueryByCell(int index, long...values)
   {
     if (!indices.containsKey(index)) return scanningUnionQueryByCell(index, values);
-    if (isIndexQuerySorted()) return indices.get(index).getKeysWithValueFromSet(values).sorted();
-    return indices.get(index).getKeysWithValueFromSet(values);
+    if (isIndexQuerySorted()) return indices.get(index).getKeysForValues(values).sorted();
+    return indices.get(index).getKeysForValues(values);
   }
 
+
+  /*
+   * Experimental...
+   *
+  public LongStream queryByMultiCell(int[] indices, long[] lowestValues, long[] highestValues, long[][] distinctValues)
+  {
+    return keys().filter(key ->
+    {
+      for (int ii=0; ii<indices.length; ii++)
+      {
+        if (indices[ii]==DB.NULL) continue;
+
+        long value = get(key, indices[ii]);
+        if (value==DB.NULL) return false;
+
+        if (lowestValues != null && lowestValues[ii]!=DB.NULL && value < lowestValues[ii]) return false;
+        if (highestValues != null && highestValues[ii]!=DB.NULL && value > highestValues[ii]) return false;
+        if (distinctValues != null && distinctValues[ii]!=null)
+        {
+          Arrays.sort(distinctValues[ii]);
+          if (Arrays.binarySearch(distinctValues[ii], value) < 0) return false;
+        }
+      }
+      return true;
+    });
+  }*/
 
   protected LongStream scanningUnionQueryByCell(int index, long... values)
   {

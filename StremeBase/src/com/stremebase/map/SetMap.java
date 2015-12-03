@@ -11,13 +11,15 @@
 
 package com.stremebase.map;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
+import com.stremebase.base.Catalog;
 import com.stremebase.base.DB;
 import com.stremebase.base.DynamicMap;
-import com.stremebase.base.util.SetCache;
 import com.stremebase.file.FileManager.ValueSlot;
 import com.stremebase.file.KeyFile;
 import com.stremebase.file.ValueFile;
@@ -25,23 +27,40 @@ import com.stremebase.file.ValueFile;
 
 /**
  * SetMap associates a key with a set or a bag of values.
+ * <p>
  * Set the set type in constructor:
+ * <p>
  * SetMap.SET: An ordinary set
+ * <p>
  * SetMap.MULTISET: A bag - occurrences are counted
- * SetMap.ATTRIBUTEDSET: Values can be further associated with an arbitrary tag (for example type or weight of value) 
+ * <p>
+ * SetMap.ATTRIBUTEDSET: Values can be associated with an arbitrary tag (for example type or weight of value)
+ * @author olli
  */
 public class SetMap extends DynamicMap
 {
-  public static final byte SET = 0;
-  public static final byte MULTISET = 1;
-  public static final byte ATTRIBUTEDSET = 2;
+  /**
+   *Set 
+   */
+  public static final byte SET = 1;
 
-  protected final byte type;
-  protected final SetCache setCache;
-  protected final long[] overwriterCache = new long[2+DB.db.MAXCACHEDSETVALUEENTRIES*2];
+  /**
+   *Bag 
+   */
+  public static final byte MULTISET = 2;
 
-  private static final long NOTWRITTEN = DB.NULL;
-  private static final long WRITTEN = 0;
+  /**
+   * Tagged values
+   */
+  public static final byte ATTRIBUTEDSET = 3;
+
+  protected byte type;
+  protected SetCache setCache;
+  protected int maxCachedSetValueEntries;
+  protected long[] overwriterCache;
+
+  protected static final long NOTWRITTEN = DB.NULL;
+  protected static final long WRITTEN = 0;
 
   /**
    * SetEntry contains not only key and value, but also an attribute
@@ -56,7 +75,7 @@ public class SetMap extends DynamicMap
     public final long value;
     public final long attribute;
 
-    protected SetEntry(long key, long value, long attribute)
+    public SetEntry(long key, long value, long attribute)
     {
       this.key = key;
       this.value = value;
@@ -78,65 +97,48 @@ public class SetMap extends DynamicMap
     }
   }
 
-  /**
-   * Creates a new SetMap with type SET for associating many values with each key.
-   * The returned map is persistent iff the database is.
-   *
-   * @param mapName
-   *          name for the map. Must be a database-wide unique value.
-   */
-  public SetMap(String mapName)
+  @Override
+  public void initialize(String mapName, Catalog catalog)
   {
-    super(mapName, DB.db.INITIALCAPACITY, DB.isPersisted());
-    this.type = SET;
-    setCache = new SetCache(this);
-  }
-
-  /**
-   * Creates a new SetMap of given type
-   * @param mapName the name
-   * @param initialCapacity Initial capacity of each set
-   * @param type the type (SET, MULTISET or ATTRIBUTEDSET)
-   * @param persist if you persist
-   */
-  public SetMap(String mapName, int initialCapacity, byte type, boolean persist)
-  {
-    super(mapName, initialCapacity, persist);
-    this.type = type;
-    setCache = new SetCache(this);
+    super.initialize(mapName, catalog);
+    type = (byte) catalog.getProperty(Catalog.SETTYPE, this);
+    setCache = new SetCache(this, (int) catalog.getProperty(Catalog.MAXCACHEDSETSIZE, this));
+    maxCachedSetValueEntries = (int) catalog.getProperty(Catalog.MAXCACHEDSETVALUEENTRIES, this);
+    overwriterCache = new long[2+maxCachedSetValueEntries*2];
   }
 
   @Override
-  public void commit()
+  public void flush()
   {
-    setCache.commitAll();
-    super.commit();
+    setCache.flushAll();
+    super.flush();
   }
 
   @Override
-  public void addIndex(byte indexType)
+  protected void addIndex(DB db, byte indexType)
   {
-    if (indexType == DB.MANY_TO_MULTIMANY)
-      throw new IllegalArgumentException("SetMap does not support DB.MANY_TO_MULTIMANY indexing.");
-    super.addIndex(indexType);
+    setCache.flushAll();
+    super.addIndex(db, indexType);
   }
 
   @Override
   public void reIndex()
   {
     indexer.clear();
-    commit();
+    flush();
     keys().forEach(key -> (values(key).forEach(value -> (indexer.index(key, value)))));
-    indexer.commit();
+    indexer.flush();
   }
 
   /**
    * Returns the size of the set, including DB.NULL values
    */
-  public long getSize(long key)
+  @Override
+  public long getValueCount(long key)
   {
-    flush(key, setCache.get(key));
-    return super.getSize(key)/2;
+    if (key==DB.NULL) return 0;
+    setCache.flush(key);
+    return super.getValueCount(key)/2;
   }
 
   /**
@@ -190,14 +192,13 @@ public class SetMap extends DynamicMap
    */
   public Stream<SetEntry> entries(long key)
   {
-    long[] set = setCache.get(key);
-    if (set!=null) writeCached(key, set);
+    setCache.flush(key);
 
     final byte[] index = new byte[1];
     index[0] = 0;
     final long[] entry = new long[2];
 
-    return super.values(key, false, false).filter(value ->
+    return super.values(key, false).filter(value ->
     {
       if (index[0]==0)
       {
@@ -220,14 +221,13 @@ public class SetMap extends DynamicMap
   @Override
   public LongStream values(long key)
   {
-    long[] set = setCache.get(key);
-    if (set!=null) writeCached(key, set);
+    setCache.flush(key);
 
     final boolean[] isValue = new boolean[1];
     isValue[0] = true;
     final long[] theValue = new long[1];
 
-    return super.values(key, false, false).filter(value ->
+    return super.values(key, false).filter(value ->
     {
       if (isValue[0])
       {
@@ -243,7 +243,18 @@ public class SetMap extends DynamicMap
     }).map(value -> {return theValue[0];});
   }
 
-  protected void put(long key, long value, long attribute)
+  /*public LongStream attributes(long key)
+  {
+    throw new UnsupportedOperationException("never implemented...");
+  }*/
+
+  /**
+   * Put for ATTRIBUTEDSETs
+   * @param key the key
+   * @param value the value
+   * @param attribute the attribute
+   */
+  public void put(long key, long value, long attribute)
   {
     if (key<0) throw new IllegalArgumentException("Negative keys are not supported ("+key+")");
     if (value==DB.NULL) throw new IllegalArgumentException("Value cannot be DB.NULL");
@@ -251,7 +262,7 @@ public class SetMap extends DynamicMap
     long[] set = setCache.get(key);
     if (set==null)
     {
-      set = new long[2+DB.db.MAXCACHEDSETVALUEENTRIES*2];
+      set = new long[2+maxCachedSetValueEntries*2];
       setCache.put(key, set);
     }
 
@@ -270,7 +281,7 @@ public class SetMap extends DynamicMap
       set[0]+=2;
       set[(int)set[0]] = value;
       set[(int)(set[0]+1)] = attribute;
-      if (set[0]+2==set.length) setCache.commit(key);
+      if (set[0]+2==set.length) setCache.flush(key);
       return;
     }
 
@@ -288,7 +299,7 @@ public class SetMap extends DynamicMap
     set[0]+=2;
     set[pos] = value;
     set[pos+1]=attribute;
-    if (set[0]+2==set.length) setCache.commit(key);
+    if (set[0]+2==set.length) setCache.flush(key);
   }
 
   protected int findPosition(long[] array, int last, long element)
@@ -321,6 +332,7 @@ public class SetMap extends DynamicMap
     put(key, value, 1);
   }
 
+
   /**
    * A helper method to put multiple entries at once to an ATTRIBUTEDSET
    * @param entries an array of arrays of 3 longs: key, value, and attribute
@@ -334,15 +346,21 @@ public class SetMap extends DynamicMap
   /**
    * Removes a value from set. For MULTISET, this means decreasing count by one.
    * @param key the key
-   * @param value thr value
+   * @param value the value
    */
-  public void remove(long key, long value)
+  public void removeOne(long key, long value)
   {
     if (type == MULTISET) put(key, value, -1); else put(key, value, DB.NULL);
   }
 
+  @Override
+  public void removeValue(long key, long value)
+  {
+    put(key, value, DB.NULL);
+  }
+
   /**
-   * Sets an attribute for a value. Works only with ATTRIBUTEDSET. 
+   * Sets an attribute for a value. Works only with ATTRIBUTEDSET.
    * @param key the key
    * @param value the value
    * @param attribute the attribute
@@ -360,21 +378,11 @@ public class SetMap extends DynamicMap
     super.remove(key);
   }
 
-  /**
-   * Writes cache to buffer.
-   * Used only internally.
-   * @param key the key
-   * @param value the cached part
-   */
-  public void flush(long key, long[] value)
-  {
-    if (value == null) return;
-    if (value[0]==0) return;
-    writeCached(key, value);
-  }
-
   protected void writeCached(long key, long[] cached)
   {
+    if (cached == null) return;
+    if (cached[0]==0) return;
+
     KeyFile header = getData(key, false);
 
     if (header!=null)
@@ -385,10 +393,10 @@ public class SetMap extends DynamicMap
 
     header = getData(key, true);
     int base = header.base(key);
-    final long oldLength = super.getSize(key);
+    final long oldLength = super.getValueCount(key);
     header.setActive(base, true);
 
-    final ValueSlot newSlot = DB.fileManager.getFreeSlot(mapGetter, cached[0]+oldLength+2);
+    final ValueSlot newSlot = fileManager.getFreeSlot(mapGetter, cached[0]+oldLength+2);
 
     long newPos = newSlot.slotPosition;
 
@@ -397,35 +405,34 @@ public class SetMap extends DynamicMap
 
     if (oldLength>0)
     {
-      ListIterator li = new ListIterator(key, oldLength, false, false);
+      ListIterator li = new ListIterator(key, oldLength, false);
       while (li.hasNext())
       {
         long oldValue = li.nextLong();
+
         li.hasNext();
         long oldAttribute = li.nextLong();
 
-        if (cachePos>=cached[0]+2 || (cachePos<cached[0]+2 && oldValue<cached[cachePos]))
+        while (cachePos<cached[0]+2 && oldValue>=cached[cachePos])
         {
-          if (oldAttribute!=DB.NULL)
+          if (cached[cachePos+1]==DB.NULL)
           {
-            newSlot.valueFile.write(newPos, oldValue);
-            newSlot.valueFile.write(newPos+1, oldAttribute);
-            newPos+=2;
-            newLength++;
+            cachePos+=2;
+            continue;
           }
-        }
-        else
-        {
-          if (cached[cachePos+1]!=DB.NULL)
-          {
-            newSlot.valueFile.write(newPos, cached[cachePos]);
-            newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
-            newPos+=2;
-            newLength++;
-            if (isIndexed()) indexer.index(key, cached[cachePos]);
-          }
+          newSlot.valueFile.write(newPos, cached[cachePos]);
+          newSlot.valueFile.write(newPos+1, cached[cachePos+1]);
+          newPos+=2;
+          newLength++;
+          if (isIndexed()) indexer.index(key, cached[cachePos]);
           cachePos+=2;
         }
+
+        if (oldAttribute==DB.NULL) continue;
+        newSlot.valueFile.write(newPos, oldValue);
+        newSlot.valueFile.write(newPos+1, oldAttribute);
+        newPos+=2;
+        newLength++;
       }
     }
 
@@ -471,7 +478,7 @@ public class SetMap extends DynamicMap
     if (end==-1) return DB.NULL;
     int valueBase = (int)header.read(base+DynamicMap.pSlotFilePosition);
 
-    ValueFile file = DB.fileManager.getValueFile(mapGetter, header.read(base+DynamicMap.pSlotFileId));
+    ValueFile file = fileManager.getValueFile(mapGetter, header.read(base+DynamicMap.pSlotFileId));
 
     int start = 0;
     int test;
@@ -497,7 +504,7 @@ public class SetMap extends DynamicMap
         else if (newAttribute==DB.NULL) file.write(valueBase+test+1, DB.NULL);
         else file.write(valueBase+test+1, attribute+newAttribute);
 
-        if (isIndexed()) if (newAttribute == DB.NULL) indexer.remove(key, attribute);
+        if (isIndexed()) if (newAttribute == DB.NULL) indexer.unIndex(key, attribute);
         else indexer.index(key, newAttribute);
 
         return WRITTEN;
@@ -583,4 +590,153 @@ public class SetMap extends DynamicMap
 
     return b.build();
   }
+
+  @Override
+  public boolean isEmpty()
+  {
+    setCache.flushAll();
+    return super.isEmpty();
+  }
+
+  @Override
+  public long getCount()
+  {
+    setCache.flushAll();
+    return super.getCount();
+  }
+
+  @Override
+  public LongStream keys(long lowestKey, long highestKey)
+  {
+    setCache.flushAll();
+    return super.keys(lowestKey, highestKey);
+  }
+
+  @Override
+  public LongStream keyset()
+  {
+    setCache.flushAll();
+    return super.keyset();
+  }
+
+  @Override
+  public boolean containsKey(long key)
+  {
+    setCache.flushAll();
+    return super.containsKey(key);
+  }
+
+  @Override
+  public boolean reserveKey(long key)
+  {
+    setCache.flushAll();
+    return super.reserveKey(key);
+  }
+
+  @Override
+  public void clear()
+  {
+    setCache.clear();
+    super.clear();
+  }
+
+  @Override
+  public LongStream query(long lowestValue, long highestValue)
+  {
+    setCache.flushAll();
+    return super.query(lowestValue, highestValue);
+  }
+
+  @Override
+  public LongStream unionQuery(long... values)
+  {
+    setCache.flushAll();
+    return super.unionQuery(values);
+  }
+
+  protected static class SetCache
+  {
+    protected final SetMap setMap;
+    protected final long[][] memory;
+    protected int nextAddress = 0;
+
+    protected final Collection<SetCache> caches = new ArrayList<>();
+    private final long[][] keyMap;
+
+    public SetCache(SetMap setMap, int MAXCACHEDSETSIZE)
+    {
+      this.setMap = setMap;
+      caches.add(this);
+      memory = new long[MAXCACHEDSETSIZE][];
+      keyMap = new long[MAXCACHEDSETSIZE][21];
+    }
+
+    public void clear()
+    {
+      Arrays.fill(keyMap, 0);
+    }
+
+    public long[] get(final long key)
+    {
+      long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
+
+      for (int i = 1; i<hashedKeys[0]; i+=2)
+        if (hashedKeys[i]==key) return memory[(int) (hashedKeys[i+1])];
+      return null;
+    }
+
+    public void put(final long key, final long[] value)
+    {
+      long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
+      for (int i = 1; i<hashedKeys[0]; i+=2)
+        if (hashedKeys[i]==key)
+        {
+          memory[(int) (hashedKeys[i+1])] = value;
+          return;
+        }
+      if (nextAddress == memory.length) flushAll();
+      else if (hashedKeys[0]==20) flush(key);
+      hashedKeys[(int) hashedKeys[0]+1] = key;
+      hashedKeys[(int) hashedKeys[0]+2] = nextAddress;
+      memory[nextAddress] = value;
+      hashedKeys[0]+=2;
+      nextAddress++;
+    }
+
+    public void flush(long key)
+    {
+      long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
+      for (int i = 1; i<hashedKeys[0]; i+=2)
+      {
+        setMap.writeCached(hashedKeys[i], memory[(int) (hashedKeys[i+1])]);
+        memory[(int) (hashedKeys[i+1])] = null;
+      }
+      hashedKeys[0] = 0;
+    }
+
+    public void flushAll()
+    {
+      if (needsFlushing()) for (int i = 0; i<keyMap.length; i++) flush(i);
+      nextAddress = 0;
+    }
+
+    protected boolean needsFlushing()
+    {
+      return nextAddress > 0;
+    }
+
+    public void remove(final long key)
+    {
+      long[] hashedKeys = keyMap[(int) (key % keyMap.length)];
+      for (int i = 1; i<hashedKeys[0]; i+=2)
+        if (hashedKeys[i]==key)
+        {
+          //TODO not working?
+          memory[(int) (hashedKeys[i]+1)] = null;
+          hashedKeys[i] = -1;
+          return;
+        }
+    }
+  }
+
 }

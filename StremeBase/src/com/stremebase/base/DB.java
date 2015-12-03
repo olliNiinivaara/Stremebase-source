@@ -13,18 +13,19 @@ package com.stremebase.base;
 
 
 import java.io.File;
-import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.stremebase.base.util.Lexicon;
 import com.stremebase.file.FileManager;
+import com.stremebase.map.ArrayMap;
+import com.stremebase.map.SetMap;
 
 /**
- *DB is the class for controlling various configuration parameters.
- *If Stremebase is started by calling {@link #startDB(boolean persist) startDB(boolean persist)}, default values are used.
- *You can overrride default values with an inherited <code>DB</code> where you set the values in a custom constructor
- *and then calling {@link #startDB(DB dataBase, boolean persist) startDB(DB dataBase, boolean persist)} with it.
- *<p>
- *At runtime, the singleton instance can be accessed from {@link #db db}. Never modify it.
+ *The database
+ *
+ * @author olli
  */
 public class DB
 {
@@ -36,208 +37,249 @@ public class DB
   public final String DIRECTORY;
 
   /**
-   * Initial value size (= length = element count) for multi-valued properties.
-   * <p>
-   * Default: 100
+   * Whether database is persisted to disk or in in-memory mode.
    */
-  public final int INITIALCAPACITY;
+  public final boolean PERSISTED;
 
   /**
-   * Initial set size (= length = element count) for indices' values.
-   * <p>
-   * Default: 10
+   * The metadata manager
    */
-  public final int INITIALINDEXVALUESIZE;
+  public final Catalog catalog;
 
   /**
-   * How many keys are included in one key file.
-   * Optimal value depends at least on density of your keys, your data access patterns, size of your RAM and speed of your HD.
-   * Basically, if keys run sequentially (as they should), the bigger the better.
-   * <p>
-   * Default: 1000000
+   * The string storage
    */
-  public final long KEYSTOAKEYFILE;
+  public final Lexicon lexicon;
 
   /**
-   * The start size for files that store data values.
-   * Every time new file is needed, the size id doubled, until {@link #MAXVALUEFILESIZE MAXVALUEFILESIZE} is reached.
-   * Optimal value depends at least on size and quantity of your data values, size of your RAM and speed of your HD.
-   * Basically, if there's plenty of RAM, the bigger the better.
-   * <p>
-   * Default: 10000000
+   * The value converter
    */
-  public final long INITIALVALUEFILESIZE;
+  public final To to;
 
-  /**
-   * The maximum size for files that store data values - unless a single value needs more space.
-   * Optimal size depends at least on the quantity of different properties, your data access patterns, and size of your RAM.
-   * If any file is bigger than your free off-heap RAM: disaster.
-   * <p>
-   * Default: 2 gigas
-   */
-  public final long MAXVALUEFILESIZE;
+  protected final FileManager fileManager;
 
-  /**
-   * The maximum number of deleted value slots that is remembered.
-   * The smaller the value, the less on-heap memory is lost. If the value is too small, some deleted slots are not
-   * recorded, which will leave gaps in files, which eats your HD space.
-   * <p>
-   * Default: 100000
-   */
-  public final int MAXCACHEDFREESLOTS;
-
-  /**
-   * The maximum number of modified set values that are cached on-heap before written to off-heap.
-   * Writing to off-heap requires ordering the values, which is slow. Therefore modifications are cached
-   * until there's a commit, read operation or <code>MAXCACHEDSETSIZE</code> is hit.
-   * <p>
-   * Default: 10000
-   */
-  public final int MAXCACHEDSETSIZE;
-
-  /**
-   * The maximum number of entries in each modified set value that are cached on-heap before written to off-heap.
-   * <p>
-   * Default: 1000
-   */
-  public final int MAXCACHEDSETVALUEENTRIES;
-
-  /**
-   * Time-zone when converting between Instants and LocalDateTimes
-   * <p>
-   * Default: ZoneId.systemDefault();
-   */
-  public final ZoneId ZONE;
+  protected final Collection<AutoCloseable> closeables = new ArrayList<>(10);
 
   //----------------------------------------------------------------
 
   /**
    * A constant indicating that the value is missing.
-   * Note that you cannot even query for DB.NULL values.
+   * You can write DB.NULL but you cannot query it.
    */
   public static final long NULL = Long.MIN_VALUE;
 
   /**
-   * Index type: No index
+   * A constant indicating end of stream. Reserved value for future use (with TCP sockets).
+   */
+  public static final long EOF = Long.MIN_VALUE+1;
+
+  /**
+   * A constant indicating end of "line". Reserved value for future use (with TCP sockets).
+   */
+  public static final long EOL = Long.MIN_VALUE+2;
+
+  /**
+   * A constant indicating end of record. Reserved value for future use (with TCP sockets).
+   */
+  public static final long EOR = Long.MIN_VALUE+3;
+
+  /**
+   * The minimum allowable value.
+   */
+  public static final long MIN_VALUE = Long.MIN_VALUE+4;
+
+  /**
+   * The maximum allowable value, same as Long.MAX_VALUE
+   */
+  public static final long MAX_VALUE = Long.MAX_VALUE;
+
+
+  /**
+   * Relation type: No relation
    */
   public static final byte NO_INDEX = 0;
 
   /**
-   * Index type: Every key is associated with at most one value and vice versa
+   * Relation type: Every attribute is associated with at most one value and vice versa
    */
   public static final byte ONE_TO_ONE = 1;
 
   /**
-   * Index type: Every key is associated with at most one value.
+   * Relation type: Every attribute is associated with at most one value.
    */
   public static final byte MANY_TO_ONE = 2;
 
   /**
-   * Index type: Every value is associated with at most one key.
+   * Relation type: Every value is associated with at most one attribute.
    */
   public static final byte ONE_TO_MANY = 3;
 
   /**
-   * Index type: Every key is associated with any value but at most once.
+   * Relation type: Every attribute is associated with any value but at most once.
    */
   public static final byte MANY_TO_MANY = 4;
 
-  /**
-   * Index type: A key may be associated even with the same value more than once.
-   */
-  public static final byte MANY_TO_MULTIMANY = 5;
-
-  private static boolean persisted = true;
 
   /**
-   * Check whether database was started in persisted or in in-memory mode.
-   * @return true, if data is persisted to disk.
+   * Constructor, override this for custom configurations
+   * @param directory where the database is persisted on disk, null=in memory, "user.dir"=user.dir/db/
    */
-  public static boolean isPersisted() {return persisted;}
-
-  /**
-   * The singleton FileManager instance.
-   * For internal use only.
-   */
-  public static final FileManager fileManager = new FileManager();
-
-  /**
-   * Access to the singleton DB instance at run-time.
-   * Mainly for internal use.
-   */
-  public static DB db;
-
-
-  /**
-   * Constructor where all final parameters are set.
-   */
-  public DB()
+  public DB(String directory)
   {
-    DIRECTORY = System.getProperty("user.dir")+File.separatorChar+"db"+File.separatorChar;
-    INITIALCAPACITY = 100;
-    INITIALINDEXVALUESIZE = 10;
-    KEYSTOAKEYFILE = 1000000;
+    PERSISTED = directory!=null;
+    if (directory==null) directory="in-memory://";
+    else if (directory.toLowerCase().equals("user.dir"))
+    {
+      directory = System.getProperty("user.dir")+File.separatorChar+"db"+File.separatorChar;
+      System.out.println("Stremebase directory: "+directory);
+    }
+    DIRECTORY = directory;
+    catalog = new Catalog(this);
+    closeables.add(catalog);
+    fileManager = new FileManager(catalog);
+    closeables.add(fileManager);
+    lexicon = new Lexicon(this);
+    to = new To(this);
 
-    INITIALVALUEFILESIZE = 10000000;
-    MAXVALUEFILESIZE = Integer.MAX_VALUE / 2;
-
-    MAXCACHEDFREESLOTS = 100000;
-    MAXCACHEDSETSIZE = 10000;
-    MAXCACHEDSETVALUEENTRIES = 1000;
-
-    ZONE = ZoneId.systemDefault();
-  }
-
-  /**
-   * Starts Stremebase with default parameter values.
-   * @param persist Set to true, if you want a true persisted database. Set to false, if you want an in-memory database.
-   */
-  public static void startDB(boolean persist)
-  {
-    startDB(new DB(), persist);
-  }
-
-  /**
-   * Starts Stremebase with custom settings.
-   * @param dataBase DB with parameter values that are optimized for your application and hardware.
-   * @param persist Set to true, if you want a true persisted database. Set to false, if you want an in-memory database.
-   */
-  public static void startDB(DB dataBase, boolean persist)
-  {
-    if (db!=null) return;
-
-    db = dataBase;
-    persisted = persist;
-    Lexicon.initialize(persist);
-
-    if (persist) Runtime.getRuntime().addShutdownHook(
+    if (PERSISTED) Runtime.getRuntime().addShutdownHook(
         new Thread()
         {
           @Override
           public void run()
           {
-            db.commit();
-            db.close();
+            flush();
+            close();
           }
         });
   }
 
   /**
-   * Forces flushing of all memory-mapped files to disk. A shutdown hook is set that will
-   * automatically call this, so you don't need to.
+   * Constructor for in-memory database
    */
-  public void commit()
+  public DB()
   {
-    fileManager.commitAll();
+    this(null);
   }
 
   /**
-   * Stores information about free spaces in files to disk. A shutdown hook is set that will
-   * automatically call this, so you don't need to.
+   * Check
+   * @return true, if data is persisted to disk.
+   */
+
+  /**
+   * Full map definition
+   * @param mapName name of the map
+   * @param mapClass Class of the map
+   * @param properties Custom properties
+   * @param overwrite whether custom properties should overwrite existing values
+   */
+  public void defineMap(String mapName, Class<? extends StremeMap> mapClass, Map<String, Object> properties, boolean overwrite)
+  {
+    catalog.defineMap(mapName, mapClass, properties, overwrite);
+  }
+
+  /**
+   * Map definition without custom properties
+   */
+  public void defineMap(String mapName, Class<? extends StremeMap> mapClass)
+  {
+    defineMap(mapName, mapClass, null, false);
+  }
+
+  /**
+   * Array map definition
+   * @param mapName name
+   * @param length of the array
+   */
+  public void defineArrayMap(String mapName, int length)
+  {
+    defineMap(mapName, ArrayMap.class, props().add(Catalog.NODESIZE, length).build(), false);
+  }
+
+  /**
+   * Multiset map definition
+   * @param mapName name
+   */
+  public void defineMultiSetMap(String mapName)
+  {
+    defineMap(mapName, SetMap.class, props().add(Catalog.SETTYPE, SetMap.MULTISET).build(), false);
+  }
+
+  /**
+   * Multiset map definition with custom properties
+   * @param mapName name
+   * @param properties properties
+   */
+  public void defineMultiSetMap(String mapName, Map<String, Object> properties)
+  {
+    defineMap(mapName, SetMap.class, props(properties).add(Catalog.SETTYPE, SetMap.MULTISET).build(), false);
+  }
+
+  /**
+   * Attributedset map definition
+   * @param mapName name
+   */
+  public void defineAttributedSetMap(String mapName)
+  {
+    defineMap(mapName, SetMap.class, props().add(Catalog.SETTYPE, SetMap.ATTRIBUTEDSET).build(), false);
+  }
+
+  /**
+   * Index definition
+   * @param mapName name of the map
+   * @param indexType Relation type of the index (DB.ONE_TO_ONE etc.)
+   */
+  public void defineIndex(String mapName, byte indexType)
+  {
+    catalog.getMap(mapName).addIndex(this, indexType);
+  }
+
+  /**
+   * Index definition for array map cell
+   * @param arrayMapName name
+   * @param indexType Relation type of the index
+   * @param cellIndex index of the cell to index
+   */
+  public void defineCellIndex(String arrayMapName, byte indexType, int cellIndex)
+  {
+    ((ArrayMap)catalog.getMap(arrayMapName)).addIndextoCell(this, indexType, cellIndex);
+  }
+
+  /**
+   * Get a map
+   * @param mapName name
+   * @return map
+   */
+  public <T extends StremeMap> T getMap(String mapName)
+  {
+    T result = catalog.getMap(mapName);
+    if (result==null) throw new RuntimeException("No map with name "+mapName+" is defined");
+    return result;
+  }
+
+  /**
+   * Forces flushing all data to disk. A shutdown hook is set that will automatically call this.
+   */
+  public void flush()
+  {
+    fileManager.flushAll();
+  }
+
+  /**
+   * Will be called from shutdown hook
+   * @param closeable Something that needs closing
+   */
+  public void addCloseable(AutoCloseable closeable)
+  {
+    closeables.add(closeable);
+  }
+
+  /**
+   * Closes autocloseables. A shutdown hook is set that will automatically call this.
    */
   public void close()
   {
-    fileManager.closeAll();
+    for (AutoCloseable closeable: closeables) try {closeable.close();} catch (Exception e){e.printStackTrace();}
   }
 
   /**
@@ -246,11 +288,65 @@ public class DB
   public void clear()
   {
     fileManager.clearAll();
-    if (persisted) FileManager.deleteDir(new File(DIRECTORY));
+    if (PERSISTED) fileManager.deleteDir(new File(DIRECTORY));
   }
 
+  /**
+   * Whether the database is created
+   * @return true if database exists
+   */
   public boolean existsOnDisk()
   {
     return new File(DIRECTORY).exists();
+  }
+
+  /**
+   * Helper method to define properties using method chaining
+   * @return new PropertiesBuilder
+   */
+  public PropertiesBuilder props()
+  {
+    return new PropertiesBuilder();
+  }
+
+  /**
+   * Helper method to define properties using method chaining
+   * @param properties
+   * @return new PropertiesBuilder with the properties
+   */
+  public PropertiesBuilder props(Map<String, Object> properties)
+  {
+    return new PropertiesBuilder(properties);
+  }
+
+  /**
+   * Helper class to define properties using method chaining
+   *
+   * @author olli
+   */
+  public static class PropertiesBuilder
+  {
+    Map<String, Object> props;
+
+    public PropertiesBuilder()
+    {
+      props = new HashMap<>();
+    }
+
+    public PropertiesBuilder(Map<String, Object> properties)
+    {
+      props = properties;
+    }
+
+    public PropertiesBuilder add(String property, Object value)
+    {
+      props.put(property, value);
+      return this;
+    }
+
+    public Map<String, Object> build()
+    {
+      return props;
+    }
   }
 }

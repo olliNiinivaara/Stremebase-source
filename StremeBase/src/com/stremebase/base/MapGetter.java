@@ -21,8 +21,10 @@ import com.stremebase.file.FileManager.ValueSlot;
 
 
 /**
- * The secret bridge between the high level map api and the low level storage engine
- * For internal use only.
+ * The bridge between the map api and the low level file storage
+ * <p>
+ * Strictly for internal use only.
+ * @author olli
  */
 public class MapGetter
 {
@@ -67,5 +69,10 @@ public class MapGetter
   public TreeMap<Long, List<ValueSlot>> getFreeValueSlots()
   {
     return map.getFreeValueSlots();
+  }
+
+  public long getKeysToaKeyFile()
+  {
+    return map.keysToAKeyFile;
   }
 }

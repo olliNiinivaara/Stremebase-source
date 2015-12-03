@@ -16,40 +16,35 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.stream.LongStream;
 
-import com.stremebase.base.DB;
+import com.stremebase.base.Catalog;
 import com.stremebase.base.DynamicMap;
+import com.stremebase.file.KeyFile;
+import com.stremebase.file.ValueFile;
 
 
 /**
  * A map to store key-object pairs (the classic key-value store)
+ * <p>
  * The object's class must implement {@link java.io.Serializable}
- * ObjectMap does not support queries by value
+ * <p>
+ * ObjectMap does not support indexing or queries by value
+ * @author olli
  */
 public class ObjectMap extends DynamicMap
-{  
-  /**
-   * Creates a new ObjectMap, which is persisted iff DB is
-   * @param mapName the name
-   */
-  public ObjectMap(String mapName)
+{
+  @Override
+  public void initialize(String mapName, Catalog catalog)
   {
-    super (mapName, 0, DB.isPersisted());
-  }
-
-  /**
-   * Creates a new ObjectMap
-   * @param mapName the name
-   * @param persisted if persisted
-   */
-  public ObjectMap(String mapName, boolean persisted)
-  {
-    super (mapName, 0, persisted);
+    catalog.setProperty(Catalog.NODESIZE, this, 5);
+    catalog.setProperty(Catalog.INITIALCAPACITY, this, 0);
+    super.initialize(mapName, catalog);
   }
 
   @Deprecated
-  public void addIndex(int indexType)
+  protected void addIndex(int indexType)
   {
     throw new IllegalArgumentException("ObjectMap does not support indexing.");
   }
@@ -59,10 +54,16 @@ public class ObjectMap extends DynamicMap
    * @param value the object to be searched for
    * @return true if exists
    */
-  public boolean containsValue(Object value)
+  public boolean containsValue(Serializable value)
   {
     long[] o = serialize(value);
     return keys().filter(key -> listEquals(key, o)).findAny().isPresent();
+  }
+
+  @Override
+  public long getValueCount(long key)
+  {
+    return 1;
   }
 
   /**
@@ -70,12 +71,22 @@ public class ObjectMap extends DynamicMap
    * @param key the key
    * @return the object
    */
-  public Object get(long key)
+  public Serializable get(long key)
+  {
+    return deSerialize(getAsBytes(key));
+  }
+
+  /**
+   * The serialized byte representation of the object 
+   * @param key the key
+   * @return the bytes
+   */
+  public long[] getAsBytes(long key)
   {
     if (!containsKey(key)) return null;
-    long[] o = new long[(int)getSize(key)];
+    long[] o = new long[(int)super.getValueCount(key)];
     get(key, o);
-    return deSerialize(o);
+    return o;
   }
 
   /**
@@ -83,13 +94,43 @@ public class ObjectMap extends DynamicMap
    * @param key the key
    * @param value the value
    */
-  public void put(long key, Object value)
+  public void put(long key, Serializable value)
   {
     final long[] array =  serialize(value);
     put(key, 0, array);
   }
 
-  protected long[] serialize(Object object)
+  /**
+   * Stores an object
+   * @param key the key
+   * @param bytes the serialized object
+   */
+  public void putBytes(long key, long[] bytes)
+  {
+    put(key, 0, bytes);
+  }
+
+  @Override
+  public void remove(long key)
+  {
+    KeyFile header = getData(key, false);
+    if (header==null) return;
+    header.setActive(header.base(key), false);
+    ValueFile slot = getSlot(key);
+    if (slot!=null) releaseSlot(key);
+  }
+
+  /**
+   * Here value is exceptionally an array of bytes, not a long.
+   */
+  @Override
+  @Deprecated
+  public void removeValue(long key, long value)
+  {
+    throw new UnsupportedOperationException("Value is Object, not long");
+  }
+
+  protected long[] serialize(Serializable object)
   {
     ByteArrayOutputStream baoStream = new ByteArrayOutputStream();
     try
@@ -109,7 +150,7 @@ public class ObjectMap extends DynamicMap
     }
   }
 
-  protected Object deSerialize(long[] lArray)
+  protected Serializable deSerialize(long[] lArray)
   {
     if (lArray==null) return null;
     byte[] bArray = new byte[lArray.length];
@@ -119,7 +160,7 @@ public class ObjectMap extends DynamicMap
     try
     {
       ObjectInputStream ostream = new ObjectInputStream(bstream);
-      return ostream.readUnshared();
+      return (Serializable) ostream.readUnshared();
     }
     catch (IOException | ClassNotFoundException e)
     {
@@ -141,6 +182,9 @@ public class ObjectMap extends DynamicMap
     throw new UnsupportedOperationException("Objects cannot be queried");
   }
 
+  /**
+   * Serialized objects cannot be streamed as longs.
+   */
   @Override
   @Deprecated
   public LongStream values(long key)
@@ -148,6 +192,9 @@ public class ObjectMap extends DynamicMap
     throw new UnsupportedOperationException("Objects have no LongStream of values");
   }
 
+  /**
+   * ObjectMap does not support indexing.
+   */
   @Override
   @Deprecated
   public void reIndex()

@@ -9,20 +9,19 @@
  * ---------------------------------------------------------
  */
 
-package com.stremebase.base.util;
+package com.stremebase.util;
 
 import java.util.Arrays;
 import java.util.PrimitiveIterator;
 import java.util.Spliterator;
 import java.util.function.LongConsumer;
 import java.util.stream.LongStream;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import com.stremebase.base.DB;
 
 /**
- * This class contains static method(s) for manipulating streams.
+ * This class contains methods for unioning and intersecting ordered streams.
  */
 public final class Streams
 {
@@ -43,10 +42,7 @@ public final class Streams
     return StreamSupport.longStream(s.new StreamUnioner(existing, streams), false);
   }
 
-  public static LongStream union(Stream<LongStream> streamstream)
-  {
-    return union(streamstream.toArray(LongStream[]::new));
-  }
+  //TODO the null-stream ignoring version
 
   /**
    * Returns intersection of the input streams. Fast, but input streams MUST be ordered.

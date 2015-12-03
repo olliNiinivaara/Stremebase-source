@@ -22,19 +22,24 @@ import java.util.function.LongConsumer;
 import java.util.stream.LongStream;
 import java.util.stream.StreamSupport;
 
+import com.stremebase.file.FileManager;
 import com.stremebase.file.KeyFile;
 import com.stremebase.file.ValueFile;
 import com.stremebase.file.FileManager.ValueSlot;
+import com.stremebase.map.ArrayMap;
 
 
 /**
- * StremeMap map is the abstract base class for all maps (this is the heart of Stremebase).
+ * StremeMap map is the abstract base class for all maps.
+ * <p>
+ * For internal use only.
+ * @author olli
  */
 public abstract class StremeMap
 {
-  protected final String mapName;
-  protected final int nodeSize;
-  protected final boolean persisted;
+  protected String mapName;
+  protected int nodeSize;
+  protected boolean persisted;
 
   protected Indexer indexer;
 
@@ -44,7 +49,11 @@ public abstract class StremeMap
   protected long largestValueFileId;
   protected long largestKey = DB.NULL;
 
-  protected final MapGetter mapGetter;
+  protected MapGetter mapGetter;
+
+  protected long keysToAKeyFile;
+
+  protected FileManager fileManager;
 
   private boolean indexQueryIsSorted = true;
 
@@ -52,51 +61,45 @@ public abstract class StremeMap
   /**
    * Basic initialization.
    * @param mapName name
-   * @param nodeSize internal length
-   * @param persist if persisted
+   * @param catalog the source of property values
    */
-  public StremeMap(String mapName, int nodeSize, boolean persist)
+  public void initialize(String mapName, Catalog catalog)
   {
-    this.mapName = mapName+nodeSize;
-    this.nodeSize = nodeSize;
-    this.persisted = DB.isPersisted() && persist;
-    this.mapGetter = new MapGetter(this);
+    this.mapName = mapName;
 
-    largestValueFileId = DB.fileManager.loadProperty(mapGetter);
+    nodeSize = (int) catalog.getProperty(Catalog.NODESIZE, this);
+
+    persisted = (boolean) catalog.getProperty(Catalog.PERSISTED, this);
+
+    if (!persisted || mapName.contains("_posIndex") || mapName.contains("_negIndex"))
+      keysToAKeyFile = (long) catalog.getProperty(Catalog.KEYSTOAMEMORYANDINDEXKEYFILE, this);
+    else if (this.getClass()==ArrayMap.class) keysToAKeyFile = (long) catalog.getProperty(Catalog.KEYSTOAARRAYKEYFILE, this);
+    else keysToAKeyFile = (long) catalog.getProperty(Catalog.KEYSTOAKEYFILE, this);
+
+
+
+    mapGetter = new MapGetter(this);
+    fileManager = catalog.db.fileManager;
+    largestValueFileId = fileManager.loadProperty(mapGetter);
   }
 
-  /**
-   * Adds an index of given type to the map
-   * @param indexType see {@link com.stremebase.base.DB} for valid values
-   */
-  public void addIndex(byte indexType)
+  protected void addIndex(DB db, byte indexType)
   {
     if (indexer!=null)
     {
       if (indexType==DB.NO_INDEX) dropIndex();
       return;
     }
-    indexer = new Indexer(indexType, this);
+    indexer = new Indexer(db, this, indexType);
     if (!isEmpty() && (indexer.isEmpty())) reIndex();
   }
 
-  /**
-   * Drops the index
-   */
-  public void dropIndex()
+  protected void dropIndex()
   {
     if (indexer==null) return;
     indexer.clear();
     indexer = null;
   }
-
-  /**
-   * @return {@link #getSize()} as int
-   *
-  public int size()
-  {
-    return (int)getSize();
-  }/*
 
   /**
    * Returns whether there is any keys stored in this map
@@ -107,7 +110,7 @@ public abstract class StremeMap
     long fileId = -1;
     while (true)
     {
-      KeyFile file = DB.fileManager.getNextKeyFile(mapGetter, fileId);
+      KeyFile file = fileManager.getNextKeyFile(mapGetter, fileId);
       if (file==null) return true;
       if (file.size()>0) return false;
       fileId = file.id;
@@ -126,14 +129,14 @@ public abstract class StremeMap
 
   /**
    * Returns the largest key currently stored to the map.
-   * Use this method to generate keys in an auto-incrementing manner, because Stremebase is optimized to handle (only) continuous key sequences efficiently.
+   * Use this method to generate keys in an auto-incrementing manner, because Stremebase can only handle continuous key sequences efficiently.
    * @return the largest key currently in the map, 0 if the map is empty.
    */
   public long getLargestKey()
   {
     if (largestKey==DB.NULL)
     {
-      OptionalLong largest = keys(getSize()-1, Long.MAX_VALUE).max();
+      OptionalLong largest = keys(getCount()-1, Long.MAX_VALUE).max();
       largestKey = largest.isPresent() ? largest.getAsLong() : 0;
     }
     return largestKey;
@@ -144,13 +147,13 @@ public abstract class StremeMap
    * @return size of the map.
    * Note that this is a relatively slow operation. Avoid successive calls by storing the value to a temporary variable.
    */
-  public long getSize()
+  public long getCount()
   {
     long size = 0;
     long fileId = -1;
     while (true)
     {
-      KeyFile file = DB.fileManager.getNextKeyFile(mapGetter, fileId);
+      KeyFile file =fileManager.getNextKeyFile(mapGetter, fileId);
       if (file==null) return size;
       size+= file.size();
       fileId = file.id;
@@ -173,13 +176,13 @@ public abstract class StremeMap
    */
   public LongStream keys()
   {
-    return keys(Long.MIN_VALUE, Long.MAX_VALUE);
+    return keys(DB.MIN_VALUE, DB.MAX_VALUE);
   }
 
   /**
    *  Returns all keys between the bounds as a {@link LongStream}
-   * @param lowestKey lowest key, inclusive. Use {@link Long#MIN_VALUE} to avoid lower bound.
-   * @param highestKey highest key, inclusive. Use {@link Long#MAX_VALUE} to avoid upper bound.
+   * @param lowestKey lowest key, inclusive. Use {@link DB#MIN_VALUE} to avoid lower bound.
+   * @param highestKey highest key, inclusive. Use {@link DB#MAX_VALUE} to avoid upper bound.
    * @return stream of keys
    */
   public LongStream keys(long lowestKey, long highestKey)
@@ -193,7 +196,7 @@ public abstract class StremeMap
    */
   public LongStream keyset()
   {
-    return StreamSupport.longStream(spliterator(Long.MIN_VALUE, Long.MAX_VALUE, true), true);
+    return StreamSupport.longStream(spliterator(DB.MIN_VALUE, DB.MAX_VALUE, true), true);
   }
 
   /**
@@ -208,10 +211,10 @@ public abstract class StremeMap
   /**
    *  Commits the map to disk. If the map is in-memory, does nothing.
    */
-  public void commit()
+  public void flush()
   {
-    if (persisted) DB.fileManager.commit(mapGetter);
-    if (isIndexed()) indexer.commit();
+    if (persisted) fileManager.flush(mapGetter);
+    if (isIndexed()) indexer.flush();
   }
 
   /**
@@ -228,7 +231,7 @@ public abstract class StremeMap
    */
   public void close()
   {
-    DB.fileManager.close(mapGetter);
+    fileManager.close(mapGetter);
     if (isIndexed()) indexer.close();
   }
 
@@ -243,6 +246,17 @@ public abstract class StremeMap
     KeyFile buf = getData(key, false);
     if (buf==null) return false;
     return buf.read(buf.base(key))==1;
+  }
+
+  /**
+   * This is _not_ needed in single-threaded applications
+   * @param key a key
+   * @return true if could be reserved
+   */
+  public boolean reserveKey(long key)
+  {
+    KeyFile buf = getData(key, true);
+    return buf.setActive(buf.base(key), true);
   }
 
 
@@ -261,7 +275,7 @@ public abstract class StremeMap
    */
   public void clear()
   {
-    DB.fileManager.clear(mapGetter);
+    fileManager.clear(mapGetter);
     if (isIndexed()) indexer.clear();
     largestValueFileId = DB.NULL;
     largestKey = DB.NULL;
@@ -269,7 +283,7 @@ public abstract class StremeMap
 
   /**
    * If true, keys returned by queries are sorted (important when calculating key intersections).
-   * Setting to false improves performance 
+   * Setting to false improves performance
    * @param sort default value true
    */
   public void setIndexQueryIsSorted(boolean sort)
@@ -288,15 +302,15 @@ public abstract class StremeMap
 
   /**
    * Returns all keys that are associated with a value that matches the given bounds (RANGE and BETWEEN-queries).
-   * @param lowestValue lowest acceptable value, inclusive. Use {@link Long#MIN_VALUE} to avoid lower bound.
-   * @param highestValue highest acceptable value, inclusive. Use {@link Long#MAX_VALUE} to avoid upper bound.
+   * @param lowestValue lowest acceptable value, inclusive. Use {@link DB#MIN_VALUE} to avoid lower bound.
+   * @param highestValue highest acceptable value, inclusive. Use {@link DB#MAX_VALUE} to avoid upper bound.
    * @return result of the query as a stream of keys
    */
   public LongStream query(long lowestValue, long highestValue)
   {
     if (!isIndexed()) return scanningQuery(lowestValue, highestValue);
-    if (indexQueryIsSorted) return indexer.getKeysWithValueFromRange(lowestValue, highestValue).sorted();
-    return indexer.getKeysWithValueFromRange(lowestValue, highestValue);
+    if (indexQueryIsSorted) return indexer.getKeysForValuesInRange(lowestValue, highestValue).sorted();
+    return indexer.getKeysForValuesInRange(lowestValue, highestValue);
   }
 
   /**
@@ -307,16 +321,32 @@ public abstract class StremeMap
   public LongStream unionQuery(long... values)
   {
     if (!isIndexed()) return scanningUnionQuery(values);
-    if (indexQueryIsSorted) return indexer.getKeysWithValueFromSet(values).sorted();
-    return indexer.getKeysWithValueFromSet(values);
+    if (indexQueryIsSorted) return indexer.getKeysForValues(values).sorted();
+    return indexer.getKeysForValues(values);
   }
+
+  /**
+   * Removes the value from everywhere
+   * @param value the value to be removed
+   */
+  public void removeValue(long value)
+  {
+    query(value, value).forEach(key -> removeValue(key, value));
+  }
+
+  /**
+   * Removes the value association with the given key
+   * @param key the key
+   * @param value the value
+   */
+  public abstract void removeValue(long key, long value);
 
   /**
    * @return Iterator over the keys
    */
   public PrimitiveIterator.OfLong keySetIterator()
   {
-    return new KeySetIterator(Long.MIN_VALUE, Long.MAX_VALUE);
+    return new KeySetIterator(DB.MIN_VALUE, DB.MAX_VALUE);
   }
 
   /**
@@ -328,7 +358,7 @@ public abstract class StremeMap
    */
   public Spliterator.OfLong spliterator(long lowestKey, long highestKey, boolean parallel)
   {
-    if (parallel)	return Spliterators.spliterator(new KeySetIterator(lowestKey, highestKey), getSize(),
+    if (parallel)	return Spliterators.spliterator(new KeySetIterator(lowestKey, highestKey), getCount(),
         java.util.Spliterator.DISTINCT | java.util.Spliterator.IMMUTABLE | java.util.Spliterator.NONNULL | java.util.Spliterator.ORDERED);
     else return Spliterators.spliteratorUnknownSize(new KeySetIterator(lowestKey, highestKey),
         java.util.Spliterator.DISTINCT | java.util.Spliterator.IMMUTABLE | java.util.Spliterator.NONNULL | java.util.Spliterator.ORDERED);
@@ -336,7 +366,7 @@ public abstract class StremeMap
 
   protected KeyFile getData(long key, boolean create)
   {
-    KeyFile result = create ? DB.fileManager.getKeyFile(mapGetter, KeyFile.fileId(key), nodeSize) : DB.fileManager.getKeyFile(mapGetter, KeyFile.fileId(key), DB.NULL);
+    KeyFile result = create ? fileManager.getKeyFile(mapGetter, KeyFile.fileId(key, keysToAKeyFile), nodeSize, keysToAKeyFile) : fileManager.getKeyFile(mapGetter, KeyFile.fileId(key, keysToAKeyFile), DB.NULL, DB.NULL);
     if (create  && key>largestKey) largestKey = key;
     return result;
   }
@@ -353,7 +383,7 @@ public abstract class StremeMap
 
   /**
    * Reindexes the map.
-   * Mainly for internal use (used when index is added to a map that contains data).
+   * Mainly for internal use (used when new index is added to a map that contains data).
    */
   abstract public void reIndex();
 
@@ -370,6 +400,13 @@ public abstract class StremeMap
    */
   abstract public LongStream values(long key);
 
+  /**
+   * Count of values associated with the key
+   * @param key the key
+   * @return number of values
+   */
+  abstract public long getValueCount(long key);
+
   abstract protected void put(long key, int index, long value);
   abstract protected LongStream scanningQuery(long lowestValue, long highestValue);
   abstract protected LongStream scanningUnionQuery(long... values);
@@ -378,7 +415,7 @@ public abstract class StremeMap
 
   protected long iteratedValue;
 
-  private class KeySetIterator implements PrimitiveIterator.OfLong
+  protected class KeySetIterator implements PrimitiveIterator.OfLong
   {
     private long key;
     private long toKey;
@@ -393,7 +430,7 @@ public abstract class StremeMap
       this.lowestKey = lowestKey;
       this.highestKey = highestKey;
 
-      if (lowestKey==Long.MIN_VALUE)
+      if (lowestKey==DB.MIN_VALUE)
       {
         key = DB.NULL;
         toKey = DB.NULL;
@@ -414,12 +451,12 @@ public abstract class StremeMap
       {
         if (key == toKey || remaining == 0)
         {
-          file = DB.fileManager.getNextKeyFile(StremeMap.this.mapGetter, fileId);
+          file = fileManager.getNextKeyFile(StremeMap.this.mapGetter, fileId);
           if (file == null) return false;
           fileId = file.id;
-          if (file.fromKey+DB.db.KEYSTOAKEYFILE<key) continue;
+          if (file.fromKey+keysToAKeyFile<key) continue;
           key = file.fromKey-1;
-          toKey = key + DB.db.KEYSTOAKEYFILE;
+          toKey = key + keysToAKeyFile;
           remaining = file.size();
           if (remaining==0)
           {

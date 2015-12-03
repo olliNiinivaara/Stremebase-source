@@ -21,18 +21,20 @@ public class KeyFile extends DbFile
 {
   public final long fromKey;
   protected final long nodeSize;
+  protected final long keysToAKeyFile;
   protected long keySize = DB.NULL;
 
-  protected KeyFile(long id, String fileName, long nodeSize, boolean persisted)
+  protected KeyFile(long id, String fileName, long nodeSize, long keysToAKeyFile, boolean persisted)
   {
-    super(id, fileName, DB.db.KEYSTOAKEYFILE * nodeSize +1, persisted);
+    super(id, fileName, keysToAKeyFile * nodeSize +1, persisted);
     this.nodeSize = nodeSize;
-    this.fromKey = id<0 ? (id+1) * DB.db.KEYSTOAKEYFILE : (id-1) * DB.db.KEYSTOAKEYFILE;
+    this.keysToAKeyFile = keysToAKeyFile;
+    this.fromKey = id<0 ? (id+1) * keysToAKeyFile : (id-1) * keysToAKeyFile;
   }
 
-  public static long fileId(long key)
+  public static long fileId(long key, long keysToAKeyFile)
   {
-    long fileId = key / DB.db.KEYSTOAKEYFILE;
+    long fileId = key / keysToAKeyFile;
     if (key>=0) fileId++;
     return fileId;
   }
@@ -40,7 +42,7 @@ public class KeyFile extends DbFile
   public int base(long key)
   {
     if (key<0) key = -key;
-    return (int) ((key % DB.db.KEYSTOAKEYFILE)*nodeSize+1);
+    return (int) ((key % keysToAKeyFile)*nodeSize+1);
   }
 
   public boolean setActive(int base, boolean active)
