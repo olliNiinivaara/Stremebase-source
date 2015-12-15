@@ -413,8 +413,6 @@ public abstract class StremeMap
 
   //------------------------------------------------------------------------------
 
-  protected long iteratedValue;
-
   protected class KeySetIterator implements PrimitiveIterator.OfLong
   {
     private long key;
@@ -470,12 +468,7 @@ public abstract class StremeMap
         if (file.read(file.base(key))==1)
         {
           remaining--;
-
-          if (key>=lowestKey)
-          {
-            iteratedValue = file.read(file.base(key)+1);
-            return true;
-          }
+          if (key>=lowestKey) return true;
         }
       }
     }

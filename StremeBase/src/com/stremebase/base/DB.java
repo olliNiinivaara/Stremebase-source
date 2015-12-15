@@ -193,7 +193,7 @@ public class DB
    */
   public void defineArrayMap(String mapName, int length)
   {
-    defineMap(mapName, ArrayMap.class, props().add(Catalog.NODESIZE, length).build(), false);
+    defineMap(mapName, ArrayMap.class, props().add(Catalog.NODESIZE, length+1).build(), false);
   }
 
   /**

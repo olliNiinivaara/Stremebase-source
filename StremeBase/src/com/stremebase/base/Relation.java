@@ -15,7 +15,7 @@ package com.stremebase.base;
 import java.util.stream.LongStream;
 import java.util.stream.LongStream.Builder;
 
-import com.stremebase.map.OneMap;
+import com.stremebase.map.ArrayMap;
 import com.stremebase.map.SetMap;
 
 /**
@@ -61,7 +61,7 @@ public class Relation
     else  if (type == DB.ONE_TO_MANY || type == DB.MANY_TO_MANY) setType = SetMap.SET;
     else throw new IllegalArgumentException("Unrecognized index type: "+type);
 
-    if (setType==0) db.defineMap(relationName, OneMap.class, db.props().add(Catalog.PERSISTED, persisted).build(), false);
+    if (setType==0) db.defineMap(relationName, ArrayMap.class, db.props().add(Catalog.PERSISTED, persisted).add(Catalog.NODESIZE, 2).build(), false);
     else  db.defineMap(relationName, SetMap.class, db.props().add(Catalog.PERSISTED, persisted).add(Catalog.SETTYPE, setType).build(), false);
 
     posi = db.getMap(relationName);
@@ -90,7 +90,7 @@ public class Relation
 
   protected LongStream getValuesWithArgumentFromRange_TO_ONE(final long lowestArgument, final long highestArgument)
   {
-    return relationMap.keys(lowestArgument, highestArgument).map(value -> {return ((OneMap)relationMap).get(value);}).filter(key -> {return key!=DB.NULL;});
+    return relationMap.keys(lowestArgument, highestArgument).map(value -> {return ((ArrayMap)relationMap).get(value, 0);}).filter(key -> {return key!=DB.NULL;});
   }
 
   protected LongStream getValuesWithArgumentFromRange_TO_MANY(final long lowestArgument, final long highestArgument)
@@ -112,7 +112,7 @@ public class Relation
     for (long argument: arguments)
     {
       if (argument<0) continue;
-      long value = ((OneMap)relationMap).get(argument);
+      long value = ((ArrayMap)relationMap).get(argument, 0);
       if (value!=DB.NULL) b.add(value);
     }
     return b.build();
@@ -131,7 +131,7 @@ public class Relation
   {
     if (argument<0 || value==DB.NULL) return;
 
-    if ((type==DB.ONE_TO_ONE) || (type == DB.MANY_TO_ONE))  ((OneMap)relationMap).put(argument, value);
+    if ((type==DB.ONE_TO_ONE) || (type == DB.MANY_TO_ONE))  ((ArrayMap)relationMap).put(argument, 0, value);
     else ((SetMap)relationMap).put(argument, value);
   }
 
