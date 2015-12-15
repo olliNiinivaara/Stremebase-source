@@ -6,6 +6,11 @@ Learn more at https://olliniinivaara.github.io/Stremebase/
 
 #Version history
 
+v.0.7.1 -- 2015-12-15
+- fixed ArrayMap nodesize definition bug
+- removed OneMap  
+
+
 v.0.7 -- 2015-12-03
 - database metadata Catalog
 - Data Access Layer  
